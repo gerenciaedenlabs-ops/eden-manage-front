@@ -145,6 +145,42 @@ export default function Dashboard() {
     setFilters((prev) => ({ ...prev, type: value }));
   }, []);
 
+  const currentUser = useMemo(() => {
+    try {
+      const stored = localStorage.getItem("user");
+      return stored ? JSON.parse(stored) : null;
+    } catch {
+      return null;
+    }
+  }, []);
+
+  const isAdmin = useMemo(() => {
+    if (!currentUser) return false;
+    const role = currentUser.role ?? currentUser.role_id;
+    const dept = currentUser.department ?? currentUser.department_id;
+    return (
+      role == 4 ||
+      dept == 2 ||
+      String(role).toLowerCase() === "admin" ||
+      String(role).toLowerCase() === "administradores" ||
+      String(dept).toLowerCase() === "ti" ||
+      String(dept).toLowerCase() === "ti admin"
+    );
+  }, [currentUser]);
+
+  const visibleSidebarItems = useMemo(() => {
+    return SIDEBAR_ITEMS.filter((item) => {
+      if (
+        item.id_name === "freelance-projects" ||
+        item.id_name === "collaborators" ||
+        item.id_name === "price-tracker"
+      ) {
+        return isAdmin;
+      }
+      return true;
+    });
+  }, [isAdmin]);
+
   // Memoizar el contenido renderizado
   const renderContent = useMemo(() => {
     switch (activeView) {
@@ -164,23 +200,31 @@ export default function Dashboard() {
           />
         );
       case "freelance-projects":
-        return (
+        return isAdmin ? (
           <FreelanceProjects
             urlApi={API_URL}
             onViewDetails={handleViewProject}
           />
+        ) : (
+          <ProjectIdeas urlApi={API_URL} />
         );
       case "collaborators":
-        return (
+        return isAdmin ? (
           <Collaborators
             urlApi={API_URL}
             apiKey={API_KEY}
             collaborators={collaborators}
             refresh={() => getCollaborators()}
           />
+        ) : (
+          <ProjectIdeas urlApi={API_URL} />
         );
       case "price-tracker":
-        return <Tracker urlApi={API_URL} />;
+        return isAdmin ? (
+          <Tracker urlApi={API_URL} />
+        ) : (
+          <ProjectIdeas urlApi={API_URL} />
+        );
       default:
         return <ProjectIdeas urlApi={API_URL} />;
     }
@@ -190,6 +234,7 @@ export default function Dashboard() {
     collaborators,
     handleViewProject,
     handleBackToProjects,
+    isAdmin,
   ]);
 
   useEffect(() => {
@@ -221,7 +266,7 @@ export default function Dashboard() {
             <SidebarGroupLabel>Navegación</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
-                {SIDEBAR_ITEMS.map((item) => (
+                {visibleSidebarItems.map((item) => (
                   <SidebarMenuItem key={item.id_name}>
                     <SidebarMenuButton
                       onClick={() => setActiveView(item.id_name)}
