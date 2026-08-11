@@ -67,6 +67,16 @@ export default function Tracker({ urlApi }) {
     note: data.note,
   });
 
+  const sortPhasesByName = (phasesList) => {
+    if (!Array.isArray(phasesList)) return [];
+    return [...phasesList].sort((a, b) =>
+      (a.name || "").localeCompare(b.name || "", undefined, {
+        numeric: true,
+        sensitivity: "base",
+      })
+    );
+  };
+
   // Fetch all projects and payments on mount
   useEffect(() => {
     fetchData();
@@ -121,7 +131,7 @@ export default function Tracker({ urlApi }) {
 
       const phases =
         phasesRes.status === "fulfilled"
-          ? phasesRes.value.data.data.map(mapPhaseFromBackend)
+          ? sortPhasesByName(phasesRes.value.data.data.map(mapPhaseFromBackend))
           : [];
       const parties =
         partiesRes.status === "fulfilled"
@@ -411,7 +421,10 @@ export default function Tracker({ urlApi }) {
         prev.map((project) => {
           if (project.id !== selectedProjectId) return project;
           // Optimistic update of phases list and total price
-          const updatedPhases = [...(project.phases || []), newPhase];
+          const updatedPhases = sortPhasesByName([
+            ...(project.phases || []),
+            newPhase,
+          ]);
           return {
             ...project,
             phases: updatedPhases,
@@ -434,8 +447,9 @@ export default function Tracker({ urlApi }) {
       setProjects((prev) =>
         prev.map((project) => {
           if (project.id !== selectedProjectId) return project;
-          const updatedPhases =
-            project.phases?.filter((p) => p.id !== phaseId) || [];
+          const updatedPhases = sortPhasesByName(
+            project.phases?.filter((p) => p.id !== phaseId) || [],
+          );
           return {
             ...project,
             phases: updatedPhases,
@@ -462,10 +476,11 @@ export default function Tracker({ urlApi }) {
       setProjects((prev) =>
         prev.map((project) => {
           if (project.id !== selectedProjectId) return project;
-          const updatedPhases =
+          const updatedPhases = sortPhasesByName(
             project.phases?.map((p) =>
               p.id === phaseId ? { ...p, ...updates } : p,
-            ) || [];
+            ) || [],
+          );
           return {
             ...project,
             phases: updatedPhases,
@@ -494,7 +509,9 @@ export default function Tracker({ urlApi }) {
       const phaseRes = await axios.get(
         `${API_BASE_URL}/projects/${projectId}/phases`,
       );
-      const phases = phaseRes.data.data.map(mapPhaseFromBackend);
+      const phases = sortPhasesByName(
+        phaseRes.data.data.map(mapPhaseFromBackend),
+      );
 
       const phase = phases.find((p) => p.id === phaseId);
       if (!phase) return;

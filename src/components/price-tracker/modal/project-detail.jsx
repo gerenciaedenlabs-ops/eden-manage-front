@@ -1,5 +1,5 @@
 /* eslint-disable react/prop-types */
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { formatCurrency } from "@lib/types.ts";
 import { Button } from "@components/ui/button.tsx";
 import { Badge } from "@components/ui/badge.tsx";
@@ -57,6 +57,16 @@ export function ProjectDetail({
 
   const status =
     remaining <= 0 ? "paid" : totalPaid > 0 ? "in-progress" : "pending";
+
+  const sortedPhases = useMemo(() => {
+    if (!project.phases) return [];
+    return [...project.phases].sort((a, b) =>
+      (a.name || "").localeCompare(b.name || "", undefined, {
+        numeric: true,
+        sensitivity: "base",
+      })
+    );
+  }, [project.phases]);
 
   const statusColors = {
     pending: "bg-[#EEEEEE] text-[#555555]",
@@ -305,7 +315,7 @@ export function ProjectDetail({
           )}
 
           <div className="space-y-2">
-            {project.phases?.map((phase) => {
+            {sortedPhases.map((phase) => {
               const phasePaid = getPhasePaid(phase.id);
               const phaseRemaining = phase.price - phasePaid;
               const isEditing = editingPhase?.id === phase.id;
