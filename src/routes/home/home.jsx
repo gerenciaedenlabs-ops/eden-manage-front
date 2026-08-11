@@ -34,7 +34,7 @@ export default function Home() {
         </h3>
         <p className="text-sm px-4 pb-6 text-gray-600 w-5/6">
           EdenLabs Manage es una aplicación web que sirve para planear, organizar y
-          distribuir el trabajo para una empresa
+          distribuir el trabajo para nuestra empresa @Eden Labs - Construimos tu futuro
         </p>
         <div className="flex justify-center p-6 pt-2 gap-7">
           <Link
