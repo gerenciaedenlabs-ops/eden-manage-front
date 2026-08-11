@@ -1,1 +1,1 @@
-## Arvix Manager
+## EdenLabs Manager

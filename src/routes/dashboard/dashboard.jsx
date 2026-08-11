@@ -43,9 +43,10 @@ import { toast } from "sonner";
 import Logo from "@assets/logo/manage_logo_removebg_small.png";
 
 const API_URL =
-  window.location.hostname == "localhost"
-    ? import.meta.env.VITE_API_URL
-    : import.meta.env.VITE_API_KEY;
+  (window.location.hostname === "localhost"
+    ? import.meta.env.VITE_API_URL || import.meta.env.VITE_API_KEY
+    : import.meta.env.VITE_API_KEY || import.meta.env.VITE_API_URL) ||
+  "http://localhost:3000/edenlabs-manager/server/v1/";
 
 const API_KEY = import.meta.env.VITE_KEY;
 
@@ -107,26 +108,20 @@ export default function Dashboard() {
 
   const handleLogOut = async () => {
     const token = localStorage.getItem("token");
-    if (!token) return;
 
     try {
-      const response = await axios.delete(`${API_URL}auth/logout`, {
-        token,
-      });
-
-      if (response.data.status === "ok") {
-        // Borrar token del almacenamiento
-        localStorage.removeItem("token");
-
-        // Redirigir al login o página de inicio
-        // window.location.href = "/login";
-        navigate("/login");
-        toast.success("Sesión cerrada correctamente");
-      } else {
-        console.error("Error cerrando sesión:", response.data.message);
+      if (token) {
+        await axios.delete(`${API_URL}auth/logout`, {
+          data: { token },
+        });
       }
     } catch (err) {
-      console.error("Error del servidor:", err);
+      console.error("Error del servidor al cerrar sesión:", err);
+    } finally {
+      localStorage.removeItem("token");
+      localStorage.removeItem("user");
+      navigate("/login");
+      toast.success("Sesión cerrada correctamente");
     }
   };
 
@@ -215,7 +210,7 @@ export default function Dashboard() {
                   <img src={Logo} alt="" />
                 </div>
                 <div className="flex flex-col gap-0.5 leading-none">
-                  <span className="text-lg font-semibold">Arvix Manager</span>
+                  <span className="text-lg font-semibold">EdenLabs Manager</span>
                 </div>
               </SidebarMenuButton>
             </SidebarMenuItem>
