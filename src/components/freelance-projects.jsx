@@ -87,10 +87,10 @@ export default function FreelanceProjects({ urlApi, onViewDetails }) {
             setFreelanceDescription("");
             // setLoading(false);
             getProjectFreelance();
-            return "Proyecto freelance agregado con éxito";
+            return "Proyecto agregado con éxito";
           } else {
             throw new Error(
-              "Error al agregar el proyecto freelance: " + response.data.message
+              "Error al agregar el proyecto: " + response.data.message
             );
           }
         }),
@@ -109,15 +109,15 @@ export default function FreelanceProjects({ urlApi, onViewDetails }) {
   return (
     <div className="space-y-6">
       <div className="items-center justify-between">
-        <h1 className="text-3xl font-bold">Proyectos freelance</h1>
+        <h1 className="text-3xl font-bold">Proyectos empresa</h1>
         <p className="text-muted-foreground">
-          Realice un seguimiento de los proyectos de sus clientes externos
+          Realice un seguimiento de los proyectos de sus clientes
         </p>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>Agregar nuevo proyecto freelance</CardTitle>
+          <CardTitle>Agregar nuevo proyecto</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div>
@@ -135,7 +135,7 @@ export default function FreelanceProjects({ urlApi, onViewDetails }) {
               id="project-description"
               value={freelanceDescription}
               onChange={(e) => setFreelanceDescription(e.target.value)}
-              placeholder="Describe el proyecto freelance"
+              placeholder="Describe el proyecto de empresa"
             />
           </div>
           <Button
