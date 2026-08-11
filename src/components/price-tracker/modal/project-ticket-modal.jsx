@@ -192,7 +192,14 @@ export function ProjectTicketModal({ project, payments, onClose }) {
               <div className="border-b border-dashed pb-4 mb-4">
                 <p className="text-[#555555] text-xs mb-2">Fases:</p>
                 <div className="space-y-2">
-                  {project.phases.map((phase) => {
+                  {[...project.phases]
+                    .sort((a, b) =>
+                      (a.name || "").localeCompare(b.name || "", undefined, {
+                        numeric: true,
+                        sensitivity: "base",
+                      }),
+                    )
+                    .map((phase) => {
                     const phasePaid = payments
                       .filter((p) => p.phaseId === phase.id)
                       .reduce((s, p) => s + p.amount, 0);

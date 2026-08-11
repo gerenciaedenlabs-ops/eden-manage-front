@@ -111,11 +111,18 @@ export function PaymentForm({ project, initialData, onSubmit, onCancel }) {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">No hay fase específica</SelectItem>
-                {project.phases.map((phase) => (
-                  <SelectItem key={phase.id} value={phase.id}>
-                    {phase.name}
-                  </SelectItem>
-                ))}
+                {[...project.phases]
+                  .sort((a, b) =>
+                    (a.name || "").localeCompare(b.name || "", undefined, {
+                      numeric: true,
+                      sensitivity: "base",
+                    }),
+                  )
+                  .map((phase) => (
+                    <SelectItem key={phase.id} value={phase.id}>
+                      {phase.name}
+                    </SelectItem>
+                  ))}
               </SelectContent>
             </Select>
           </div>

@@ -131,12 +131,19 @@ export function ProjectForm({ mode, initialData, onSubmit, onCancel }) {
         currency,
         mode: projectMode,
         totalPrice: phasesTotal,
-        phases: validPhases.map((p) => ({
-          id: p.id || crypto.randomUUID(),
-          name: p.name.trim(),
-          price: Number.parseFloat(p.price),
-          status: p.status || "pending",
-        })),
+        phases: [...validPhases]
+          .sort((a, b) =>
+            (a.name || "").localeCompare(b.name || "", undefined, {
+              numeric: true,
+              sensitivity: "base",
+            }),
+          )
+          .map((p) => ({
+            id: p.id || crypto.randomUUID(),
+            name: p.name.trim(),
+            price: Number.parseFloat(p.price),
+            status: p.status || "pending",
+          })),
         parties: validParties,
       });
     }
