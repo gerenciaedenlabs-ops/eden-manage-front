@@ -260,7 +260,7 @@ export function ProjectForm({ mode, initialData, onSubmit, onCancel }) {
                 <Input
                   value={party.note}
                   onChange={(e) => updateParty(index, "note", e.target.value)}
-                  placeholder="Nota (opcional, p. ej., Freelancer, Empresa)"
+                  placeholder="Nota (opcional, p. ej., Cliente, Empresa)"
                   className="text-sm"
                 />
               </div>

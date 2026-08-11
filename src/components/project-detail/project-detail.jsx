@@ -1,5 +1,5 @@
 /* eslint-disable react/prop-types */
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   Plus,
   MoreHorizontal,
@@ -56,7 +56,28 @@ export default function ProjectDetail({
   project,
   onBack,
   collaborators,
+  isAdmin,
 }) {
+  const userIsAdmin = useMemo(() => {
+    if (typeof isAdmin === "boolean") return isAdmin;
+    try {
+      const stored = localStorage.getItem("user");
+      const user = stored ? JSON.parse(stored) : null;
+      if (!user) return false;
+      const role = user.role ?? user.role_id;
+      const dept = user.department ?? user.department_id;
+      return (
+        role == 4 ||
+        dept == 2 ||
+        String(role).toLowerCase() === "admin" ||
+        String(role).toLowerCase() === "administradores" ||
+        String(dept).toLowerCase() === "ti" ||
+        String(dept).toLowerCase() === "ti admin"
+      );
+    } catch {
+      return false;
+    }
+  }, [isAdmin]);
   const [taskTitle, setTaskTitle] = useState("");
   const [taskDescription, setTaskDescription] = useState("");
   const [taskAssigned, setTaskAssigned] = useState("");
@@ -191,55 +212,57 @@ export default function ProjectDetail({
         <h1 className="text-3xl font-bold">{project?.title}</h1>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Agregar nueva tarea</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid gap-4">
-            <div>
-              <Label>Nombre de la tarea</Label>
-              <Input
-                value={taskTitle}
-                onChange={(e) => setTaskTitle(e.target.value)}
-              />
+      {userIsAdmin && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Agregar nueva tarea</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid gap-4">
+              <div>
+                <Label>Nombre de la tarea</Label>
+                <Input
+                  value={taskTitle}
+                  onChange={(e) => setTaskTitle(e.target.value)}
+                />
+              </div>
+
+              <div>
+                <Label>Descripción</Label>
+                <Textarea
+                  value={taskDescription}
+                  onChange={(e) => setTaskDescription(e.target.value)}
+                />
+              </div>
+
+              <div>
+                <Label>Colaborador</Label>
+                <Select value={taskAssigned} onValueChange={setTaskAssigned}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccionar usuario" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {collaborators.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>
+                        {c.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
-            <div>
-              <Label>Descripción</Label>
-              <Textarea
-                value={taskDescription}
-                onChange={(e) => setTaskDescription(e.target.value)}
-              />
-            </div>
-
-            <div>
-              <Label>Colaborador</Label>
-              <Select value={taskAssigned} onValueChange={setTaskAssigned}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Seleccionar usuario" />
-                </SelectTrigger>
-                <SelectContent>
-                  {collaborators.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>
-                      {c.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          <Button
-            onClick={handleAddTask}
-            disabled={isAddButtonDisabled}
-            className="w-full"
-          >
-            <Plus className="w-4 h-4 mr-2" />
-            Agregar tarea
-          </Button>
-        </CardContent>
-      </Card>
+            <Button
+              onClick={handleAddTask}
+              disabled={isAddButtonDisabled}
+              className="w-full"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Agregar tarea
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
       <div>
         {/* <div className="px-4">

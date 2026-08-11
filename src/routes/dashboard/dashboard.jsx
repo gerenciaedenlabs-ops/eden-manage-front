@@ -66,7 +66,7 @@ const SIDEBAR_ITEMS = [
   {
     id: 3,
     id_name: "freelance-projects",
-    title: "Proyectos freelance",
+    title: "Proyectos empresa",
     icon: Briefcase,
   },
   {
@@ -197,6 +197,7 @@ export default function Dashboard() {
             project={selectedProject}
             onBack={handleBackToProjects}
             collaborators={collaborators}
+            isAdmin={isAdmin}
           />
         );
       case "freelance-projects":
@@ -320,7 +321,7 @@ export default function Dashboard() {
                   <SelectContent>
                     <SelectItem value="all">Todos los tipos</SelectItem>
                     <SelectItem value="internal">Interno</SelectItem>
-                    <SelectItem value="freelance">Freelance</SelectItem>
+                    <SelectItem value="freelance">Empresa</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

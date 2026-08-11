@@ -37,7 +37,7 @@ export default function ViewProjectIdea({ isOpen, onClose, info }) {
           <CardDescription>
             {info.type_id == 1
               ? "Proyecto Independiente"
-              : "Proyecto Freelance"}
+              : "Proyecto Empresarial"}
           </CardDescription>
         </CardHeader>
       </Modal>
