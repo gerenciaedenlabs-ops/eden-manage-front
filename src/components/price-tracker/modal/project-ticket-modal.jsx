@@ -254,7 +254,7 @@ export function ProjectTicketModal({ project, payments, onClose }) {
           )}
 
           <div className="text-center text-xs text-[#555555]">
-            <p>Arvix Ledger</p>
+            <p>EdenLabs Ledger</p>
             <p className="mt-1">ID: {project.id.slice(0, 8)}</p>
           </div>
         </div>

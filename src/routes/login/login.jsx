@@ -7,9 +7,10 @@ import axios from "axios";
 import { toast } from "sonner";
 
 const API_URL =
-  window.location.hostname == "localhost"
-    ? import.meta.env.VITE_API_URL
-    : import.meta.env.VITE_API_KEY;
+  (window.location.hostname === "localhost"
+    ? import.meta.env.VITE_API_URL || import.meta.env.VITE_API_KEY
+    : import.meta.env.VITE_API_KEY || import.meta.env.VITE_API_URL) ||
+  "http://localhost:3000/edenlabs-manager/server/v1/";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -53,7 +54,7 @@ export default function Login() {
     <div className="min-h-screen bg-white flex items-center justify-center p-4">
       <div className="w-full max-w-sm space-y-8">
         <div className="text-center">
-          <h1 className="text-2xl font-light text-black">Arvix Manager</h1>
+          <h1 className="text-2xl font-light text-black">EdenLabs Manager</h1>
         </div>
 
         <div action="" className="space-y-6">

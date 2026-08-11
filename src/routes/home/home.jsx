@@ -26,14 +26,14 @@ export default function Home() {
       >
         <img
           src={Img}
-          alt="Arvix Manage"
+          alt="EdenLabs Manage"
           className="w-full h-52 object-contain"
         />
         <h3 className="mt-3 px-4 pt-3 mb-1 text-lg font-semibold text-gray-800">
-          Arvix Manage
+          EdenLabs Manage
         </h3>
         <p className="text-sm px-4 pb-6 text-gray-600 w-5/6">
-          Arvix Manage es una aplicación web que sirve para planear, organizar y
+          EdenLabs Manage es una aplicación web que sirve para planear, organizar y
           distribuir el trabajo para una empresa
         </p>
         <div className="flex justify-center p-6 pt-2 gap-7">
