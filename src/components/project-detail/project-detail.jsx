@@ -312,9 +312,58 @@ export default function ProjectDetail({
     onMoveTask(taskId, newStatus);
   };
 
+  // El listado del tablero trae la descripción truncada (para no bajar cientos
+  // de KB en cada carga); si la tarea o alguna de sus subtareas viene truncada,
+  // se trae el detalle completo aparte y se mezcla en el estado al abrir el modal.
+  const mergeTaskDetail = (prevTasks, detail) => {
+    const updateList = (list) =>
+      list.map((t) => {
+        if (t.id === detail.id) {
+          return {
+            ...t,
+            description: detail.description,
+            description_truncated: false,
+            subtasks: (t.subtasks || []).map((s) => {
+              const full = detail.subtasks?.find((fs) => fs.id === s.id);
+              return full ? { ...s, description: full.description, description_truncated: false } : s;
+            }),
+          };
+        }
+        if (t.subtasks?.some((s) => s.id === detail.id)) {
+          return {
+            ...t,
+            subtasks: t.subtasks.map((s) =>
+              s.id === detail.id ? { ...s, description: detail.description, description_truncated: false } : s
+            ),
+          };
+        }
+        return t;
+      });
+
+    return {
+      pending: updateList(prevTasks.pending),
+      inProgress: updateList(prevTasks.inProgress),
+      completed: updateList(prevTasks.completed),
+    };
+  };
+
   const handleViewTask = (task) => {
     setOpenViewModal(true);
     setInfoViewModal(task);
+
+    const needsDetail =
+      task.description_truncated || task.subtasks?.some((s) => s.description_truncated);
+
+    if (needsDetail) {
+      axios
+        .get(`${urlApi}task/${task.id}`, { headers: authHeaders() })
+        .then((response) => {
+          if (response.data.status === "ok") {
+            setTasks((prev) => mergeTaskDetail(prev, response.data.data));
+          }
+        })
+        .catch((error) => console.error(error));
+    }
   };
 
   const handleEditTask = (task) => {
