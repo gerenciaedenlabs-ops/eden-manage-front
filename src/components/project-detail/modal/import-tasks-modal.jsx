@@ -8,6 +8,7 @@ import Modal from "react-modal";
 import axios from "axios";
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
+import { authHeaders, getCurrentUserId } from "@components/project-detail/task-constants.js";
 
 // Quita acentos y normaliza para poder emparejar encabezados de columna
 // sin depender de tildes/mayúsculas exactas ("Título" vs "titulo", etc).
@@ -148,8 +149,8 @@ export default function ImportTasksModal({
       axios
         .post(
           `${urlApi}project/${projectId}/import-tasks`,
-          { rows },
-          { headers: { "Content-Type": "application/json" } }
+          { rows, created_by: getCurrentUserId() },
+          { headers: authHeaders() }
         )
         .then((response) => {
           if (response.data.status === "ok") {

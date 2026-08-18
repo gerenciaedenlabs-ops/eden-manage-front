@@ -124,3 +124,53 @@ export const getDueDateStatus = (dueDate, status) => {
 
 export const formatDueDate = (dueDate) =>
   toDateOnly(dueDate).toLocaleDateString("es-CO", { day: "numeric", month: "short" });
+
+// ── Identidad y permisos (leídos de localStorage, mismo patrón ya usado en
+// ProjectDetail/dashboard.jsx — se recalculan aquí para no tener que hacer
+// prop-drilling de nuevos booleanos por todo el árbol de componentes de Tareas) ──
+
+export const getCurrentUser = () => {
+  try {
+    const stored = localStorage.getItem("user");
+    return stored ? JSON.parse(stored) : null;
+  } catch {
+    return null;
+  }
+};
+
+export const getCurrentUserId = () => getCurrentUser()?.id ?? null;
+
+// Misma condición exacta que el isAdmin de dashboard.jsx (role=4 "administradores"
+// o department=2 "TI Admin"). A diferencia de "canManageTasks" (que también deja
+// pasar al rol desarrolladores), esto es estrictamente "es admin" — se usa para
+// saber quién puede saltarse la restricción de "solo mis tareas".
+export const isRealAdmin = () => {
+  const user = getCurrentUser();
+  if (!user) return false;
+  const role = user.role ?? user.role_id;
+  const dept = user.department ?? user.department_id;
+  return (
+    role == 4 ||
+    dept == 2 ||
+    String(role).toLowerCase() === "admin" ||
+    String(role).toLowerCase() === "administradores" ||
+    String(dept).toLowerCase() === "ti" ||
+    String(dept).toLowerCase() === "ti admin"
+  );
+};
+
+// ¿Puede el usuario actual editar/eliminar esta tarea/subtarea? Admin: siempre.
+// Cualquier otro: solo si él mismo la creó (tareas sin created_by registrado,
+// como las importadas antes de esta función, quedan reservadas al admin).
+export const canEditTask = (task) => {
+  if (isRealAdmin()) return true;
+  if (!task || task.created_by == null) return false;
+  return String(task.created_by) === String(getCurrentUserId());
+};
+
+// Headers para las llamadas a /task* y /checklist*, que ahora requieren sesión
+// (authMiddleware en el backend) — antes ninguna ruta de tareas pedía token.
+export const authHeaders = () => ({
+  "Content-Type": "application/json",
+  Authorization: `Bearer ${localStorage.getItem("token")}`,
+});

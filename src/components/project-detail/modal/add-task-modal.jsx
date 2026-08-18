@@ -15,7 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@components/ui/select";
-import { STATUS } from "@components/project-detail/task-constants.js";
+import { STATUS, authHeaders, getCurrentUserId } from "@components/project-detail/task-constants.js";
 import { TagSelect, DueDatePicker } from "@components/project-detail/task-shared.jsx";
 
 export default function AddTaskModal({
@@ -56,12 +56,13 @@ export default function AddTaskModal({
       tags: tag || null,
       due_date: dueDate || null,
       status: STATUS.PENDING,
+      created_by: getCurrentUserId(),
     };
 
     toast.promise(
       axios
         .post(`${urlApi}task`, payload, {
-          headers: { "Content-Type": "application/json" },
+          headers: authHeaders(),
         })
         .then((response) => {
           if (response.data.status === "ok") {

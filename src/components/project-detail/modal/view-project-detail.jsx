@@ -6,7 +6,11 @@ import { toast } from "sonner";
 import { Badge } from "@components/ui/badge";
 import { Button } from "@components/ui/button";
 import { Pencil } from "lucide-react";
-import { column_translations } from "@components/project-detail/task-constants.js";
+import {
+  column_translations,
+  authHeaders,
+  canEditTask,
+} from "@components/project-detail/task-constants.js";
 import {
   MoveStatusButtons,
   SubtasksSection,
@@ -52,7 +56,7 @@ export default function ViewProjectTask({
             tags: metaTag || null,
             due_date: metaDueDate || null,
           },
-          { headers: { "Content-Type": "application/json" } }
+          { headers: authHeaders() }
         )
         .then((response) => {
           if (response.data.status === "ok") {
@@ -124,7 +128,7 @@ export default function ViewProjectTask({
               </Badge>
             )}
             {info.due_date && <DueDateBadge dueDate={info.due_date} status={info.status} />}
-            {isAdmin && (
+            {canEditTask(info) && (
               <Button
                 variant="ghost"
                 size="icon"
@@ -152,6 +156,10 @@ export default function ViewProjectTask({
           />
         )}
       </div>
+
+      <p className="text-xs text-muted-foreground">
+        Creado por: {info.created_by_name || "Sin autor"}
+      </p>
 
       <div className="border-t pt-3 space-y-3">
         <SubtasksSection
