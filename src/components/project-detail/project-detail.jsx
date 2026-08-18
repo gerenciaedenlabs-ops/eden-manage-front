@@ -51,6 +51,8 @@ import {
   TASK_TAGS,
   getTagColor,
   findTaskById,
+  authHeaders,
+  canEditTask,
 } from "@components/project-detail/task-constants.js";
 import { MoveStatusButtons, DueDateBadge, Avatar } from "@components/project-detail/task-shared.jsx";
 
@@ -122,13 +124,17 @@ function TaskCard({ task, column, onView, onEdit, onDelete, onMove }) {
                   <Eye /> Ver
                 </DropdownMenuItem>
 
-                <DropdownMenuItem onClick={() => onEdit(task)}>
-                  <Edit /> Editar
-                </DropdownMenuItem>
+                {canEditTask(task) && (
+                  <>
+                    <DropdownMenuItem onClick={() => onEdit(task)}>
+                      <Edit /> Editar
+                    </DropdownMenuItem>
 
-                <DropdownMenuItem onClick={() => onDelete(task.id)}>
-                  <Trash2 /> Eliminar
-                </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => onDelete(task.id)}>
+                      <Trash2 /> Eliminar
+                    </DropdownMenuItem>
+                  </>
+                )}
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
@@ -174,6 +180,15 @@ function TaskCard({ task, column, onView, onEdit, onDelete, onMove }) {
             <MoveStatusButtons status={column} onMove={(status) => onMove(task.id, status)} />
           </div>
         </div>
+
+        {task.created_by_name && (
+          <div className="flex items-center gap-1.5 min-w-0">
+            <Avatar name={task.created_by_name} size={16} />
+            <span className="text-[10px] text-muted-foreground truncate">
+              Creado por {task.created_by_name}
+            </span>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -235,7 +250,7 @@ export default function ProjectDetail({
       const response = await axios.get(
         `${urlApi}project/partners/${project.id}`,
         {
-          headers: { "Content-Type": "application/json" },
+          headers: authHeaders(),
         },
       );
 
@@ -267,7 +282,7 @@ export default function ProjectDetail({
     toast.promise(
       axios
         .put(`${urlApi}task/state/${idTask}`, moveIn, {
-          headers: { "Content-Type": "application/json" },
+          headers: authHeaders(),
         })
         .then((response) => {
           if (response.data.status === "ok") {

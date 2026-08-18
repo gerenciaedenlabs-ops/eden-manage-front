@@ -4,6 +4,7 @@ import { Button } from "@components/ui/button";
 import Modal from "react-modal";
 import { toast } from "sonner";
 import axios from "axios";
+import { authHeaders } from "@components/project-detail/task-constants.js";
 
 export default function DeleteProjectTask({
   isOpen,
@@ -22,9 +23,7 @@ export default function DeleteProjectTask({
     toast.promise(
       axios
         .delete(`${urlApi}task/${info}`, {
-          headers: {
-            "Content-Type": "application/json",
-          },
+          headers: authHeaders(),
         })
         .then((response) => {
           if (response.data.status === "ok") {

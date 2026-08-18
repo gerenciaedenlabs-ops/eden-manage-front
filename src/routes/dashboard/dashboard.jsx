@@ -176,6 +176,17 @@ export default function Dashboard() {
     );
   }, [currentUser]);
 
+  // Permiso más amplio que isAdmin: admins pueden todo, y además el rol
+  // "desarrolladores" puede gestionar tareas dentro de un proyecto (crear,
+  // editar, importar, subtareas, checklist) — pero NO ve Gerencia,
+  // Colaboradores, Cotizaciones ni Proyectos empresa, que siguen exigiendo isAdmin.
+  const canManageTasks = useMemo(() => {
+    if (isAdmin) return true;
+    if (!currentUser) return false;
+    const role = currentUser.role ?? currentUser.role_id;
+    return role == 3 || String(role).toLowerCase() === "desarrolladores";
+  }, [isAdmin, currentUser]);
+
   const visibleSidebarItems = useMemo(() => {
     return SIDEBAR_ITEMS.filter((item) => {
       if (
@@ -206,7 +217,7 @@ export default function Dashboard() {
             project={selectedProject}
             onBack={handleBackToProjects}
             collaborators={collaborators}
-            isAdmin={isAdmin}
+            isAdmin={canManageTasks}
           />
         );
       case "freelance-projects":
@@ -251,6 +262,7 @@ export default function Dashboard() {
     handleViewProject,
     handleBackToProjects,
     isAdmin,
+    canManageTasks,
   ]);
 
   useEffect(() => {

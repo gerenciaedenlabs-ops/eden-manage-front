@@ -15,6 +15,7 @@ import { useState, useEffect } from "react";
 import Modal from "react-modal";
 import axios from "axios";
 import { toast } from "sonner";
+import { authHeaders } from "@components/project-detail/task-constants.js";
 
 export default function EditProjectTask({
   isOpen,
@@ -53,9 +54,7 @@ export default function EditProjectTask({
             assigned_to: infoAssigned,
           },
           {
-            headers: {
-              "Content-Type": "application/json",
-            },
+            headers: authHeaders(),
           }
         )
         .then((response) => {

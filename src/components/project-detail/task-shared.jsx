@@ -47,6 +47,9 @@ import {
   getTagColor,
   getInitials,
   getAvatarColor,
+  authHeaders,
+  getCurrentUserId,
+  canEditTask,
 } from "@components/project-detail/task-constants.js";
 
 // Avatar circular con iniciales, color consistente por nombre. "Sin asignar"
@@ -260,7 +263,7 @@ export function SubtasksSection({ task, urlApi, collaborators, onMoveTask, refre
             tags: editTag || null,
             due_date: editDueDate || null,
           },
-          { headers: { "Content-Type": "application/json" } }
+          { headers: authHeaders() }
         )
         .then((response) => {
           if (response.data.status === "ok") {
@@ -285,7 +288,7 @@ export function SubtasksSection({ task, urlApi, collaborators, onMoveTask, refre
     toast.promise(
       axios
         .delete(`${urlApi}task/${sub.id}`, {
-          headers: { "Content-Type": "application/json" },
+          headers: authHeaders(),
         })
         .then((response) => {
           if (response.data.status === "ok") {
@@ -313,12 +316,13 @@ export function SubtasksSection({ task, urlApi, collaborators, onMoveTask, refre
       tags: tag || null,
       due_date: dueDate || null,
       status: STATUS.PENDING,
+      created_by: getCurrentUserId(),
     };
 
     toast.promise(
       axios
         .post(`${urlApi}task`, payload, {
-          headers: { "Content-Type": "application/json" },
+          headers: authHeaders(),
         })
         .then((response) => {
           if (response.data.status === "ok") {
@@ -429,8 +433,14 @@ export function SubtasksSection({ task, urlApi, collaborators, onMoveTask, refre
                 <DueDateBadge dueDate={sub.due_date} status={sub.status} />
               )}
 
+              {sub.created_by_name && (
+                <span className="text-[10px] text-muted-foreground">
+                  Creado por {sub.created_by_name}
+                </span>
+              )}
+
               <div className="flex items-center justify-between">
-                {isAdmin ? (
+                {canEditTask(sub) ? (
                   <div className="flex items-center gap-0.5">
                     <Button
                       variant="ghost"
@@ -545,7 +555,7 @@ export function ChecklistSection({ task, urlApi, refresh, isAdmin, defaultOpen =
       const response = await axios.put(
         `${urlApi}checklist/${item.id}`,
         { is_checked: !item.is_checked },
-        { headers: { "Content-Type": "application/json" } }
+        { headers: authHeaders() }
       );
       if (response.data.status === "ok") refresh();
     } catch (error) {
@@ -566,7 +576,7 @@ export function ChecklistSection({ task, urlApi, refresh, isAdmin, defaultOpen =
       const response = await axios.put(
         `${urlApi}checklist/${editingItemId}`,
         { label: editingLabel.trim() },
-        { headers: { "Content-Type": "application/json" } }
+        { headers: authHeaders() }
       );
       if (response.data.status === "ok") {
         setEditingItemId(null);
@@ -583,7 +593,7 @@ export function ChecklistSection({ task, urlApi, refresh, isAdmin, defaultOpen =
 
     try {
       const response = await axios.delete(`${urlApi}checklist/${item.id}`, {
-        headers: { "Content-Type": "application/json" },
+        headers: authHeaders(),
       });
       if (response.data.status === "ok") refresh();
     } catch (error) {
@@ -599,7 +609,7 @@ export function ChecklistSection({ task, urlApi, refresh, isAdmin, defaultOpen =
       const response = await axios.post(
         `${urlApi}task/${task.id}/checklist`,
         { label: newLabel.trim() },
-        { headers: { "Content-Type": "application/json" } }
+        { headers: authHeaders() }
       );
       if (response.data.status === "ok") {
         setNewLabel("");
