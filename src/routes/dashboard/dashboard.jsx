@@ -7,6 +7,7 @@ import {
   Briefcase,
   Filter,
   Receipt,
+  Wallet,
 } from "lucide-react";
 import { Button } from "@components/ui/button";
 import { Label } from "@components/ui/label";
@@ -38,6 +39,7 @@ import FreelanceProjects from "@components/freelance-projects.jsx";
 import ProjectDetail from "@components/project-detail/project-detail.jsx";
 import Collaborators from "@components/collaborators.jsx";
 import Tracker from "@components/price-tracker/tracker.jsx";
+import Gerencia from "@components/gerencia/gerencia.jsx";
 import axios from "axios";
 import { toast } from "sonner";
 import Logo from "@assets/logo/manage_logo_removebg_small.png";
@@ -48,7 +50,7 @@ const API_URL =
     : import.meta.env.VITE_API_KEY || import.meta.env.VITE_API_URL) ||
   "http://localhost:3000/edenlabs-manager/server/v1/";
 
-const API_KEY = import.meta.env.VITE_KEY;
+const API_KEY = import.meta.env.VITE_API_KEY;
 
 const SIDEBAR_ITEMS = [
   {
@@ -80,6 +82,12 @@ const SIDEBAR_ITEMS = [
     id_name: "price-tracker",
     title: "Cotizaciones",
     icon: Receipt,
+  },
+  {
+    id: 6,
+    id_name: "gerencia",
+    title: "Gerencia",
+    icon: Wallet,
   },
 ];
 
@@ -173,7 +181,8 @@ export default function Dashboard() {
       if (
         item.id_name === "freelance-projects" ||
         item.id_name === "collaborators" ||
-        item.id_name === "price-tracker"
+        item.id_name === "price-tracker" ||
+        item.id_name === "gerencia"
       ) {
         return isAdmin;
       }
@@ -223,6 +232,12 @@ export default function Dashboard() {
       case "price-tracker":
         return isAdmin ? (
           <Tracker urlApi={API_URL} />
+        ) : (
+          <ProjectIdeas urlApi={API_URL} />
+        );
+      case "gerencia":
+        return isAdmin ? (
+          <Gerencia urlApi={API_URL} />
         ) : (
           <ProjectIdeas urlApi={API_URL} />
         );
