@@ -43,6 +43,7 @@ import Gerencia from "@components/gerencia/gerencia.jsx";
 import NotificationBell from "@components/notifications/notification-bell.jsx";
 import axios from "axios";
 import { toast } from "sonner";
+import { authHeaders } from "@components/project-detail/task-constants.js";
 import Logo from "@assets/logo/manage_logo_removebg_small.png";
 
 const API_URL =
@@ -97,6 +98,7 @@ export default function Dashboard() {
   const [selectedProject, setSelectedProject] = useState(null);
   const [filters, setFilters] = useState({ status: "all", type: "all" });
   const [collaborators, setCollaborators] = useState([]);
+  const [pendingTaskId, setPendingTaskId] = useState(null);
 
   const navigate = useNavigate();
 
@@ -143,6 +145,37 @@ export default function Dashboard() {
   const handleViewProject = useCallback((project) => {
     setSelectedProject(project);
     setActiveView("project-detail");
+  }, []);
+
+  // Al hacer click en una notificación: resuelve a qué proyecto pertenece la
+  // tarea (y si es una subtarea, a su tarea raíz, que es la que tiene tarjeta
+  // propia en el kanban), abre ese proyecto y deja marcado el id para que
+  // ProjectDetail abra el modal de esa tarea en cuanto termine de cargar.
+  const handleOpenTask = useCallback(async (taskId) => {
+    try {
+      const taskResponse = await axios.get(`${API_URL}task/${taskId}`, {
+        headers: authHeaders(),
+      });
+
+      if (taskResponse.data.status !== "ok") {
+        throw new Error("No se pudo cargar la tarea");
+      }
+
+      const task = taskResponse.data.data;
+      const rootTaskId = task.parent_id || task.id;
+
+      const projectsResponse = await axios.get(`${API_URL}project/project-active`);
+      const project =
+        projectsResponse.data.data?.find((p) => p.id === task.project_id) ||
+        { id: task.project_id, title: "Proyecto" };
+
+      setSelectedProject(project);
+      setActiveView("project-detail");
+      setPendingTaskId(rootTaskId);
+    } catch (error) {
+      console.error(error);
+      toast.error("No se pudo abrir la tarea asignada");
+    }
   }, []);
 
   // Memoizar handlers para filtros
@@ -219,6 +252,8 @@ export default function Dashboard() {
             onBack={handleBackToProjects}
             collaborators={collaborators}
             isAdmin={canManageTasks}
+            initialTaskId={pendingTaskId}
+            onInitialTaskHandled={() => setPendingTaskId(null)}
           />
         );
       case "freelance-projects":
@@ -264,6 +299,7 @@ export default function Dashboard() {
     handleBackToProjects,
     isAdmin,
     canManageTasks,
+    pendingTaskId,
   ]);
 
   useEffect(() => {
@@ -361,7 +397,7 @@ export default function Dashboard() {
         <header className="flex h-16 shrink-0 items-center justify-between gap-2 border-b px-4">
           <SidebarTrigger className="-ml-1" />
           <div className="flex items-center gap-2">
-            <NotificationBell urlApi={API_URL} />
+            <NotificationBell urlApi={API_URL} onOpenTask={handleOpenTask} />
             <Button onClick={handleLogOut}>Cerrar Sesión</Button>
           </div>
         </header>

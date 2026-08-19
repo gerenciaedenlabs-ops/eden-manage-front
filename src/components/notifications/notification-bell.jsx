@@ -17,9 +17,10 @@ import { authHeaders } from "@components/project-detail/task-constants.js";
 
 const POLL_INTERVAL_MS = 20000;
 
-export default function NotificationBell({ urlApi }) {
+export default function NotificationBell({ urlApi, onOpenTask }) {
   const [notifications, setNotifications] = useState([]);
   const [unread, setUnread] = useState(0);
+  const [open, setOpen] = useState(false);
   const seenIds = useRef(new Set());
   const isFirstLoad = useRef(true);
 
@@ -75,8 +76,14 @@ export default function NotificationBell({ urlApi }) {
       .catch((error) => console.error(error));
   };
 
+  const handleClickNotification = (n) => {
+    if (!n.is_read) markAsRead(n.id);
+    setOpen(false);
+    if (n.related_task_id && onOpenTask) onOpenTask(n.related_task_id);
+  };
+
   return (
-    <Popover>
+    <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button variant="ghost" size="icon" className="relative h-9 w-9">
           <Bell className="w-4 h-4" />
@@ -112,7 +119,7 @@ export default function NotificationBell({ urlApi }) {
               <button
                 key={n.id}
                 type="button"
-                onClick={() => !n.is_read && markAsRead(n.id)}
+                onClick={() => handleClickNotification(n)}
                 className={`w-full text-left p-3 border-b last:border-0 hover:bg-muted/50 ${
                   !n.is_read ? "bg-blue-50/60" : ""
                 }`}

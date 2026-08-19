@@ -200,6 +200,8 @@ export default function ProjectDetail({
   onBack,
   collaborators,
   isAdmin,
+  initialTaskId,
+  onInitialTaskHandled,
 }) {
   const userIsAdmin = useMemo(() => {
     if (typeof isAdmin === "boolean") return isAdmin;
@@ -365,6 +367,20 @@ export default function ProjectDetail({
         .catch((error) => console.error(error));
     }
   };
+
+  // Al llegar desde una notificación (click en "Se te asignó la tarea..."),
+  // Dashboard deja el id de la tarea raíz pendiente; en cuanto el tablero
+  // termina de cargar se abre su modal de detalle automáticamente.
+  useEffect(() => {
+    if (!initialTaskId) return;
+
+    const found = findTaskById(tasks, initialTaskId);
+    if (found) {
+      handleViewTask(found);
+      onInitialTaskHandled?.();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tasks, initialTaskId]);
 
   const handleEditTask = (task) => {
     setOpenEditModal(true);
