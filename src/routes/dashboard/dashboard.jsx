@@ -40,6 +40,7 @@ import ProjectDetail from "@components/project-detail/project-detail.jsx";
 import Collaborators from "@components/collaborators.jsx";
 import Tracker from "@components/price-tracker/tracker.jsx";
 import Gerencia from "@components/gerencia/gerencia.jsx";
+import NotificationBell from "@components/notifications/notification-bell.jsx";
 import axios from "axios";
 import { toast } from "sonner";
 import Logo from "@assets/logo/manage_logo_removebg_small.png";
@@ -359,7 +360,10 @@ export default function Dashboard() {
       <SidebarInset>
         <header className="flex h-16 shrink-0 items-center justify-between gap-2 border-b px-4">
           <SidebarTrigger className="-ml-1" />
-          <Button onClick={handleLogOut}>Cerrar Sesión</Button>
+          <div className="flex items-center gap-2">
+            <NotificationBell urlApi={API_URL} />
+            <Button onClick={handleLogOut}>Cerrar Sesión</Button>
+          </div>
         </header>
         <div className="flex-1 p-6">{renderContent}</div>
       </SidebarInset>
