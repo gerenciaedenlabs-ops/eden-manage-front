@@ -8,6 +8,7 @@ import {
   Filter,
   Receipt,
   Wallet,
+  HandCoins,
 } from "lucide-react";
 import { Button } from "@components/ui/button";
 import { Label } from "@components/ui/label";
@@ -40,6 +41,7 @@ import ProjectDetail from "@components/project-detail/project-detail.jsx";
 import Collaborators from "@components/collaborators.jsx";
 import Tracker from "@components/price-tracker/tracker.jsx";
 import Gerencia from "@components/gerencia/gerencia.jsx";
+import Personal from "@components/personal/personal.jsx";
 import NotificationBell from "@components/notifications/notification-bell.jsx";
 import axios from "axios";
 import { toast } from "sonner";
@@ -90,6 +92,12 @@ const SIDEBAR_ITEMS = [
     id_name: "gerencia",
     title: "Gerencia",
     icon: Wallet,
+  },
+  {
+    id: 7,
+    id_name: "personal",
+    title: "Personal",
+    icon: HandCoins,
   },
 ];
 
@@ -288,6 +296,8 @@ export default function Dashboard() {
         ) : (
           <ProjectIdeas urlApi={API_URL} />
         );
+      case "personal":
+        return <Personal urlApi={API_URL} />;
       default:
         return <ProjectIdeas urlApi={API_URL} />;
     }
