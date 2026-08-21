@@ -41,31 +41,122 @@ const countChecklistItems = (description) => {
   return count;
 };
 
+// Plantilla "plana": una fila por tarea/subtarea, con Tipo/Título/Tags/
+// Descripción/Padre explícitos (Padre = título exacto de la tarea raíz).
+const parseFlatRows = (rawRows) =>
+  rawRows
+    .map((rawRow) => {
+      const row = { tipo: "", titulo: "", tags: "", descripcion: "", padre: "" };
+
+      for (const key of Object.keys(rawRow)) {
+        const norm = normalize(key);
+        const value = rawRow[key];
+
+        if (norm.includes("tipo")) row.tipo = String(value || "").trim();
+        else if (norm.includes("titulo")) row.titulo = String(value || "").trim();
+        else if (norm.includes("tag")) row.tags = String(value || "").trim();
+        else if (norm.includes("descripcion")) row.descripcion = String(value || "");
+        else if (norm.includes("padre")) row.padre = String(value || "").trim();
+      }
+
+      return row;
+    })
+    .filter((row) => row.titulo);
+
+// "Implementado" → completed, "Parcial" → inProgress, cualquier otra cosa
+// (incluido "Pendiente" o vacío) → pending. Mismo modelo de 3 estados que ya
+// usa el tablero, para no perder el progreso real ya registrado en el backlog.
+const mapEstado = (estado) => {
+  const norm = normalize(estado);
+  if (norm === "implementado") return "completed";
+  if (norm === "parcial") return "inProgress";
+  return "pending";
+};
+
+// Plantilla "agrupada": una fila por HU (Épica/ID HU/Historia de Usuario/
+// Estado HU) seguida de N filas de Subtarea que le pertenecen (con las
+// primeras columnas en blanco, como exporta un backlog tipo Notion/Excel
+// con celdas combinadas). No hay columna "Padre" explícita: el padre de
+// cada subtarea es la última HU vista.
+const parseGroupedRows = (rawRows) => {
+  const rows = [];
+  let currentTitle = null;
+
+  for (const rawRow of rawRows) {
+    let epica = "";
+    let idHu = "";
+    let historia = "";
+    let estadoHu = "";
+    let subtarea = "";
+    let estadoSub = "";
+    let notas = "";
+
+    for (const key of Object.keys(rawRow)) {
+      const norm = normalize(key);
+      const value = String(rawRow[key] || "").trim();
+
+      if (norm.includes("epica")) epica = value;
+      else if (norm.includes("historia")) historia = value;
+      else if (norm.includes("estado") && norm.includes("subtarea")) estadoSub = value;
+      else if (norm.includes("estado")) estadoHu = value;
+      else if (norm.includes("subtarea")) subtarea = value;
+      else if (norm.includes("notas")) notas = value;
+      else if (norm.includes("id") && norm.includes("hu")) idHu = value;
+    }
+
+    if (historia) {
+      currentTitle = idHu ? `${idHu}: ${historia}` : historia;
+      rows.push({
+        tipo: "US",
+        titulo: currentTitle,
+        tags: epica,
+        descripcion: notas,
+        padre: "",
+        status: mapEstado(estadoHu),
+      });
+    }
+
+    if (subtarea && currentTitle) {
+      rows.push({
+        tipo: "Subtask",
+        titulo: subtarea,
+        tags: "",
+        descripcion: "",
+        padre: currentTitle,
+        status: mapEstado(estadoSub),
+      });
+    }
+  }
+
+  return rows;
+};
+
+// Detecta qué plantilla trae la hoja mirando sus encabezados, y la parsea
+// con el parser correspondiente. "Historia de Usuario" es la señal más
+// distintiva de la plantilla agrupada (no aparece en la plana).
+const detectAndParseSheet = (rawRows) => {
+  if (rawRows.length === 0) return [];
+
+  const headers = Object.keys(rawRows[0]).map(normalize);
+  // Frase completa (singular) para no confundir el encabezado real "Historia
+  // de Usuario" con una celda de título suelta como "... Backlog de HISTORIAS
+  // de Usuario" (plural, hojas de resumen sin tabla real) — sheet_to_json
+  // toma esa celda como si fuera el único encabezado de la hoja.
+  const isGrouped = headers.some((h) => h.includes("historia de usuario"));
+  const isFlat = headers.some((h) => h.includes("titulo"));
+
+  if (isGrouped) return parseGroupedRows(rawRows);
+  if (isFlat) return parseFlatRows(rawRows);
+  return [];
+};
+
 const parseWorkbook = (arrayBuffer) => {
   const workbook = XLSX.read(arrayBuffer, { type: "array" });
 
   return workbook.SheetNames.map((sheetName) => {
     const sheet = workbook.Sheets[sheetName];
     const rawRows = XLSX.utils.sheet_to_json(sheet, { defval: "" });
-
-    const rows = rawRows
-      .map((rawRow) => {
-        const row = { tipo: "", titulo: "", tags: "", descripcion: "", padre: "" };
-
-        for (const key of Object.keys(rawRow)) {
-          const norm = normalize(key);
-          const value = rawRow[key];
-
-          if (norm.includes("tipo")) row.tipo = String(value || "").trim();
-          else if (norm.includes("titulo")) row.titulo = String(value || "").trim();
-          else if (norm.includes("tag")) row.tags = String(value || "").trim();
-          else if (norm.includes("descripcion")) row.descripcion = String(value || "");
-          else if (norm.includes("padre")) row.padre = String(value || "").trim();
-        }
-
-        return row;
-      })
-      .filter((row) => row.titulo);
+    const rows = detectAndParseSheet(rawRows);
 
     return { sheetName, rows, included: true };
   }).filter((sheet) => sheet.rows.length > 0);
@@ -105,7 +196,7 @@ export default function ImportTasksModal({
         setSheets(parsed);
         if (parsed.length === 0) {
           toast.error(
-            "No se encontraron filas con columnas reconocibles (Tipo, Título, Tags, Descripción, Padre)."
+            "No se encontraron filas con columnas reconocibles (ni la plantilla Tipo/Título/Tags/Descripción/Padre, ni la de Épica/ID HU/Historia de Usuario/Subtarea)."
           );
         }
       } catch (error) {
@@ -197,11 +288,15 @@ export default function ImportTasksModal({
 
       <CardContent className="space-y-4">
         <p className="text-sm text-muted-foreground">
-          Sube un .xlsx con columnas <strong>Tipo</strong> (US/Task o Subtask),{" "}
-          <strong>Título</strong>, <strong>Tags</strong>,{" "}
-          <strong>Descripción</strong> y <strong>Padre (si es subtask)</strong>.
-          Las tareas se crean dentro de este proyecto, sin colaborador asignado
-          (lo asignas después manualmente).
+          Se reconocen dos plantillas: una plana con columnas{" "}
+          <strong>Tipo</strong> (US/Task o Subtask), <strong>Título</strong>,{" "}
+          <strong>Tags</strong>, <strong>Descripción</strong> y{" "}
+          <strong>Padre (si es subtask)</strong>; o un backlog de HUs con{" "}
+          <strong>Épica</strong>, <strong>ID HU</strong>,{" "}
+          <strong>Historia de Usuario</strong>, <strong>Estado HU</strong>,{" "}
+          <strong>Subtarea</strong> y <strong>Estado subtarea</strong>{" "}
+          agrupadas por fila. Las tareas se crean dentro de este proyecto, sin
+          colaborador asignado (lo asignas después manualmente).
         </p>
 
         <label className="flex items-center gap-2 border rounded-md p-3 cursor-pointer hover:bg-muted/50">
