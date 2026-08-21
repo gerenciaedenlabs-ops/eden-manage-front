@@ -1,26 +1,18 @@
 /* eslint-disable react/prop-types */
 import { useState, useEffect } from "react";
-import { Eye, Edit, Undo2, MoreHorizontal } from "lucide-react";
+import { Eye, Edit, Undo2, MoreHorizontal, FolderOpen } from "lucide-react";
 import { Button } from "@components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@components/ui/card";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@components/ui/dropdown-menu";
-import { Progress } from "@components/ui/progress";
-import { Badge } from "@components/ui/badge";
 import axios from "axios";
 import EditProjectActive from "@components/active-project/modal/edit-active-project.jsx";
 import DeleteProjectActive from "@components/active-project/modal/delete-active-project.jsx";
 import ViewProjectActive from "@components/active-project/modal/view-active-project.jsx";
+import { ProgressRing, StatusBadge, ProjectsStatsRow, PageHeaderIcon } from "@components/projects-shared.jsx";
 
 export default function ActiveProjects({ urlApi, onViewDetails }) {
   const [listActive, setListActive] = useState([]);
@@ -47,101 +39,94 @@ export default function ActiveProjects({ urlApi, onViewDetails }) {
       });
   }
 
-  const getStatusLabel = (progress) => {
-    if (progress <= 25) return { label: "Iniciado", color: "bg-blue-500" };
-    if (progress <= 75) return { label: "En curso", color: "bg-yellow-500" };
-    return { label: "Finalizando", color: "bg-green-500" };
-  };
-
   useEffect(() => {
     getProjectActive();
   }, []);
 
   return (
-    <div className="space-y-6">
-      <div className="items-center justify-between">
-        <h1 className="text-3xl font-bold">Proyectos activos</h1>
-        <p className="text-muted-foreground">
-          Gestione sus proyectos internos en curso
-        </p>
+    <div className="space-y-8">
+      <div className="flex items-center gap-3.5">
+        <PageHeaderIcon>
+          <FolderOpen className="w-[21px] h-[21px] text-neutral-700" />
+        </PageHeaderIcon>
+        <div>
+          <h1 className="text-[26px] font-extrabold tracking-tight text-neutral-950">
+            Proyectos activos
+          </h1>
+          <p className="text-[13.5px] text-muted-foreground">
+            Gestione sus proyectos internos en curso
+          </p>
+        </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {listActive.map((project) => {
-          const status = getStatusLabel(project.progress);
+      <ProjectsStatsRow projects={listActive} />
 
-          return (
-            <Card key={project.id}>
-              <CardHeader>
-                <div className="items-center justify-between">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-lg">{project.title}</CardTitle>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="sm">
-                          <MoreHorizontal className="w-4 h-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent>
-                        <DropdownMenuItem
-                          className="hover:cursor-pointer"
-                          onClick={() => {
-                            setOpenViewModal(true);
-                            setInfoViewModal(project);
-                          }}
-                        >
-                          <Eye className="h-4 w-4" /> Visualizar
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          className="hover:cursor-pointer"
-                          onClick={() => {
-                            setOpenEditModal(true);
-                            setInfoEditModal(project);
-                          }}
-                        >
-                          <Edit className="h-4 w-4" /> Editar
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          className="hover:cursor-pointer"
-                          onClick={() => {
-                            setOpenDeleteModal(true);
-                            setInfoDeleteModal(project.id);
-                          }}
-                        >
-                          <Undo2 className="h-4 w-4" /> Degradar
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
-                  <Badge className={`${status.color} text-white`}>
-                    {status.label}
-                  </Badge>
-                </div>
-                <CardDescription>
-                  {project.description.length > 150
-                    ? project.description.slice(0, 150) + "..."
-                    : project.description}
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <div className="flex justify-between text-sm mb-2">
-                    <span>Progreso</span>
-                    <span>{project.progress}%</span>
-                  </div>
-                  <Progress value={project.progress} />
-                </div>
-                <Button
-                  onClick={() => onViewDetails(project)}
-                  className="w-full"
-                >
-                  <Eye className="w-4 h-4 mr-2" />
-                  Ver detalles
-                </Button>
-              </CardContent>
-            </Card>
-          );
-        })}
+      <div className="grid gap-[18px] md:grid-cols-2 lg:grid-cols-3">
+        {listActive.map((project) => (
+          <div
+            key={project.id}
+            className="flex flex-col gap-4 rounded-[14px] border border-[#ededed] bg-white p-5 shadow-[0_1px_2px_rgba(0,0,0,0.03),0_8px_20px_-12px_rgba(0,0,0,0.08)]"
+          >
+            <div className="flex items-start justify-between gap-2">
+              <h3 className="text-[16.5px] font-bold leading-snug text-neutral-950">
+                {project.title}
+              </h3>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-7 w-7 -mr-1.5 -mt-1 text-neutral-400">
+                    <MoreHorizontal className="w-[18px] h-[18px]" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent>
+                  <DropdownMenuItem
+                    className="hover:cursor-pointer"
+                    onClick={() => {
+                      setOpenViewModal(true);
+                      setInfoViewModal(project);
+                    }}
+                  >
+                    <Eye className="h-4 w-4" /> Visualizar
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    className="hover:cursor-pointer"
+                    onClick={() => {
+                      setOpenEditModal(true);
+                      setInfoEditModal(project);
+                    }}
+                  >
+                    <Edit className="h-4 w-4" /> Editar
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    className="hover:cursor-pointer"
+                    onClick={() => {
+                      setOpenDeleteModal(true);
+                      setInfoDeleteModal(project.id);
+                    }}
+                  >
+                    <Undo2 className="h-4 w-4" /> Degradar
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+
+            <div className="flex items-center gap-4">
+              <p className="min-w-0 flex-1 text-[13px] leading-relaxed text-neutral-500 line-clamp-3">
+                {project.description}
+              </p>
+              <ProgressRing progress={project.progress} />
+            </div>
+
+            <StatusBadge progress={project.progress} />
+
+            <Button
+              onClick={() => onViewDetails(project)}
+              className="h-10 w-full rounded-[9px]"
+            >
+              <Eye className="w-[15px] h-[15px] mr-1.5" />
+              Ver detalles
+            </Button>
+          </div>
+        ))}
       </div>
       <ViewProjectActive
         isOpen={openViewModal}
