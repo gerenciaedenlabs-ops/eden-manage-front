@@ -4,10 +4,10 @@ import axios from "axios";
 import { toast } from "sonner";
 import { Checkbox } from "@components/ui/checkbox";
 import { Button } from "@components/ui/button";
-import { Trash2 } from "lucide-react";
+import { Trash2, Pencil } from "lucide-react";
 import { formatCurrency, formatDate, authHeaders } from "@components/personal/personal-constants.js";
 
-export default function DebtDetailModal({ isOpen, onClose, debt, urlApi, refresh }) {
+export default function DebtDetailModal({ isOpen, onClose, debt, urlApi, refresh, onEdit }) {
   if (!debt) return null;
 
   const installments = debt.installments || [];
@@ -81,9 +81,14 @@ export default function DebtDetailModal({ isOpen, onClose, debt, urlApi, refresh
           <h2 className="text-lg font-semibold">{debt.title}</h2>
           {debt.reason && <p className="text-sm text-muted-foreground">{debt.reason}</p>}
         </div>
-        <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={handleDelete}>
-          <Trash2 size={16} />
-        </Button>
+        <div className="flex items-center gap-1 shrink-0">
+          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onEdit(debt)}>
+            <Pencil size={15} />
+          </Button>
+          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleDelete}>
+            <Trash2 size={16} />
+          </Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-3 gap-3 text-center">

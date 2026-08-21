@@ -41,6 +41,7 @@ export default function Personal({ urlApi }) {
   const [openAddDebt, setOpenAddDebt] = useState(false);
   const [openAddSavingsGoal, setOpenAddSavingsGoal] = useState(false);
   const [selectedDebtId, setSelectedDebtId] = useState(null);
+  const [editingDebt, setEditingDebt] = useState(null);
   const [entryGoalId, setEntryGoalId] = useState(null);
   const [confirmAmounts, setConfirmAmounts] = useState({});
 
@@ -733,10 +734,14 @@ export default function Personal({ urlApi }) {
       />
 
       <AddDebtModal
-        isOpen={openAddDebt}
-        onClose={() => setOpenAddDebt(false)}
+        isOpen={openAddDebt || !!editingDebt}
+        onClose={() => {
+          setOpenAddDebt(false);
+          setEditingDebt(null);
+        }}
         urlApi={urlApi}
         refresh={refresh}
+        debt={editingDebt}
       />
 
       <DebtDetailModal
@@ -745,6 +750,10 @@ export default function Personal({ urlApi }) {
         debt={selectedDebt}
         urlApi={urlApi}
         refresh={refresh}
+        onEdit={(d) => {
+          setSelectedDebtId(null);
+          setEditingDebt(d);
+        }}
       />
 
       <AddSavingsGoalModal
