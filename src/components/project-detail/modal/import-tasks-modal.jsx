@@ -42,33 +42,38 @@ const countChecklistItems = (description) => {
 };
 
 // Plantilla "plana": una fila por tarea/subtarea, con Tipo/Título/Tags/
-// Descripción/Padre explícitos (Padre = título exacto de la tarea raíz).
+// Descripción/Padre explícitos. Padre puede ser el título exacto de la tarea
+// raíz, o (como exporta el backlog de seguimiento de HUs) "[ID] Título" —
+// ese ID se resuelve contra la columna ID propia de cada fila en el backend.
 const parseFlatRows = (rawRows) =>
   rawRows
     .map((rawRow) => {
-      const row = { tipo: "", titulo: "", tags: "", descripcion: "", padre: "" };
+      const row = { tipo: "", titulo: "", tags: "", descripcion: "", padre: "", id: "" };
 
       for (const key of Object.keys(rawRow)) {
         const norm = normalize(key);
         const value = rawRow[key];
 
-        if (norm.includes("tipo")) row.tipo = String(value || "").trim();
+        if (norm === "id") row.id = String(value || "").trim();
+        else if (norm.includes("tipo")) row.tipo = String(value || "").trim();
         else if (norm.includes("titulo")) row.titulo = String(value || "").trim();
         else if (norm.includes("tag")) row.tags = String(value || "").trim();
         else if (norm.includes("descripcion")) row.descripcion = String(value || "");
         else if (norm.includes("padre")) row.padre = String(value || "").trim();
+        else if (norm.includes("estado")) row.status = mapEstado(value);
       }
 
       return row;
     })
     .filter((row) => row.titulo);
 
-// "Implementado" → completed, "Parcial" → inProgress, cualquier otra cosa
-// (incluido "Pendiente" o vacío) → pending. Mismo modelo de 3 estados que ya
-// usa el tablero, para no perder el progreso real ya registrado en el backlog.
+// "Hecha"/"Implementado" → completed, "Parcial" → inProgress, cualquier otra
+// cosa (incluido "Pendiente", "Sin verificar" o vacío) → pending. Mismo
+// modelo de 3 estados que ya usa el tablero, para no perder el progreso real
+// ya registrado en el backlog.
 const mapEstado = (estado) => {
   const norm = normalize(estado);
-  if (norm === "implementado") return "completed";
+  if (norm === "implementado" || norm === "hecha") return "completed";
   if (norm === "parcial") return "inProgress";
   return "pending";
 };
@@ -246,9 +251,10 @@ export default function ImportTasksModal({
         .then((response) => {
           if (response.data.status === "ok") {
             const { tasks, subtasks, checklist_items } = response.data.created;
+            const { tasks: tasksUpdated, subtasks: subtasksUpdated } = response.data.updated || {};
             refresh();
             handleClose();
-            return `Importadas ${tasks} tareas, ${subtasks} subtareas y ${checklist_items} items de checklist`;
+            return `Creadas ${tasks} tareas y ${subtasks} subtareas (+${checklist_items} items de checklist). Actualizado el estado de ${tasksUpdated || 0} tareas y ${subtasksUpdated || 0} subtareas ya existentes.`;
           } else {
             throw new Error(response.data.message || "Error al importar");
           }
@@ -334,9 +340,11 @@ export default function ImportTasksModal({
 
             <div className="text-sm bg-muted/50 rounded-md p-3 space-y-1">
               <p>
-                Se crearán <strong>{totals.tasks}</strong> tareas,{" "}
-                <strong>{totals.subtasks}</strong> subtareas y aprox.{" "}
-                <strong>{totals.checklist}</strong> items de checklist.
+                Se procesarán <strong>{totals.tasks}</strong> tareas y{" "}
+                <strong>{totals.subtasks}</strong> subtareas (con aprox.{" "}
+                <strong>{totals.checklist}</strong> items de checklist para
+                las nuevas). Las que ya existan en este proyecto (mismo
+                título) se actualizan de estado en vez de duplicarse.
               </p>
             </div>
           </div>
