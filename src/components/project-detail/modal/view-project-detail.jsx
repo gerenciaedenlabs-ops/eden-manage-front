@@ -18,6 +18,8 @@ import {
   DueDatePicker,
   DueDateBadge,
   TagSelect,
+  ErpMetaSection,
+  AcceptanceCriteriaSection,
 } from "@components/project-detail/task-shared.jsx";
 
 export default function ViewProjectTask({
@@ -146,6 +148,12 @@ export default function ViewProjectTask({
         {info.description}
       </p>
 
+      {info.external_code && (
+        <div className="border-t pt-3">
+          <ErpMetaSection task={info} />
+        </div>
+      )}
+
       <div className="flex items-center justify-between">
         <Badge variant="outline">{info.assigned_to || "Sin asignar"}</Badge>
 
@@ -179,6 +187,8 @@ export default function ViewProjectTask({
           isAdmin={isAdmin}
           defaultOpen
         />
+
+        <AcceptanceCriteriaSection task={info} />
       </div>
     </Modal>
   );

@@ -59,6 +59,17 @@ export const getTagColor = (tag) => {
   return TAG_COLOR_MAP[tag.trim().toLowerCase()] || TAG_COLOR_DEFAULT;
 };
 
+// Color fijo por prioridad MoSCoW (historias importadas del catálogo ERP).
+// Mismo shape que TAG_COLOR_MAP (bar/bg/text) para reusar los mismos badges.
+const PRIORITY_COLOR_MAP = {
+  must: { bar: "#ef4444", bg: "#fef2f2", text: "#b91c1c" },
+  should: { bar: "#f59e0b", bg: "#fffbeb", text: "#b45309" },
+  could: { bar: "#94a3b8", bg: "#f8fafc", text: "#475569" },
+};
+
+export const getPriorityColor = (priority) =>
+  (priority && PRIORITY_COLOR_MAP[priority.toLowerCase()]) || null;
+
 // Acento de color por columna/estado, usado en el header y la barra superior de cada columna.
 export const STATUS_COLORS = {
   [STATUS.PENDING]: { bar: "#a1a1aa", bg: "#fafafa", border: "#f0f0f0", text: "#0a0a0a", chip: "#e5e5e5", chipText: "#525252" },

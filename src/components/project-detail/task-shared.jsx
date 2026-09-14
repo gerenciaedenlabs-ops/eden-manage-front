@@ -45,6 +45,7 @@ import {
   getDueDateStatus,
   formatDueDate,
   getTagColor,
+  getPriorityColor,
   getInitials,
   getAvatarColor,
   authHeaders,
@@ -88,6 +89,35 @@ export function TagBadge({ tag, className = "" }) {
       className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[10.5px] font-bold ${className}`}
     >
       {tag}
+    </span>
+  );
+}
+
+// Badge de prioridad MoSCoW (Must/Should/Could), solo para historias
+// importadas del catálogo ERP — null para cualquier tarea sin prioridad.
+export function PriorityBadge({ priority, className = "" }) {
+  const color = getPriorityColor(priority);
+  if (!color) return null;
+  return (
+    <span
+      style={{ backgroundColor: color.bg, color: color.text }}
+      className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10.5px] font-bold ${className}`}
+    >
+      {priority}
+    </span>
+  );
+}
+
+// Chip compacto de código de módulo (ej. "ADM"), usado en tarjetas del kanban
+// y en la vista jerárquica para identificar de un vistazo a qué módulo del
+// backlog ERP pertenece una historia.
+export function ModuleChip({ code, className = "" }) {
+  if (!code) return null;
+  return (
+    <span
+      className={`inline-flex items-center rounded border border-neutral-200 bg-neutral-50 px-1.5 py-0.5 text-[10px] font-mono font-bold text-neutral-600 ${className}`}
+    >
+      {code}
     </span>
   );
 }
@@ -695,6 +725,122 @@ export function ChecklistSection({ task, urlApi, refresh, isAdmin, defaultOpen =
             </Button>
           </div>
         )}
+      </CollapsibleContent>
+    </Collapsible>
+  );
+}
+
+// Metadata de una historia de usuario importada del catálogo ERP (módulo,
+// épica, rol, caso de uso, prioridad, release, puntos, dependencias, reglas
+// de negocio, notas UX). Solo se renderiza si la tarea trae external_code
+// (viene del importador /import-erp-catalog) — cualquier otra tarea del
+// tablero no la muestra. Es de solo lectura: estos datos se editan
+// reimportando la hoja, no hay formulario para tocarlos a mano.
+export function ErpMetaSection({ task }) {
+  if (!task.external_code) return null;
+
+  const rows = [
+    ["Módulo", task.module_name ? `${task.module_code} · ${task.module_name}` : task.module_code],
+    ["Épica", task.epic_name],
+    ["Rol", task.role_name],
+    ["Caso de uso", task.use_case_name ? `${task.use_case_code} · ${task.use_case_name}` : task.use_case_code],
+    ["Dependencias", task.dependencies_raw],
+  ].filter(([, value]) => !!value);
+
+  return (
+    <div className="space-y-2.5 text-xs">
+      <div className="flex flex-wrap items-center gap-1.5">
+        <Badge variant="outline" className="font-mono text-[10.5px]">
+          {task.external_code}
+        </Badge>
+        <PriorityBadge priority={task.priority} />
+        {task.release_tag && (
+          <Badge variant="outline" className="text-[10.5px]">
+            {task.release_tag}
+          </Badge>
+        )}
+        {task.story_points != null && (
+          <Badge variant="outline" className="text-[10.5px]">
+            {task.story_points} pts
+          </Badge>
+        )}
+      </div>
+
+      {rows.length > 0 && (
+        <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-muted-foreground">
+          {rows.flatMap(([label, value]) => [
+            <span key={`${label}-label`} className="font-semibold text-foreground">
+              {label}
+            </span>,
+            <span key={`${label}-value`}>{value}</span>,
+          ])}
+        </div>
+      )}
+
+      {task.business_rules && (
+        <div className="space-y-0.5">
+          <p className="font-semibold text-foreground">Reglas de negocio y normativa</p>
+          <p className="whitespace-pre-wrap text-muted-foreground">{task.business_rules}</p>
+        </div>
+      )}
+
+      {task.ux_notes && (
+        <div className="space-y-0.5">
+          <p className="font-semibold text-foreground">Notas de UX / interacción</p>
+          <p className="whitespace-pre-wrap text-muted-foreground">{task.ux_notes}</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Criterios de aceptación estructurados (Dado/Cuando/Entonces) de una
+// historia importada del catálogo ERP. Distinto del checklist genérico
+// (ChecklistSection): acá cada criterio es de solo lectura y viene con su
+// contexto/acción/resultado esperado por separado, no un simple bullet.
+export function AcceptanceCriteriaSection({ task, defaultOpen = false }) {
+  const criteria = task.acceptance_criteria || [];
+  if (criteria.length === 0) return null;
+
+  return (
+    <Collapsible defaultOpen={defaultOpen}>
+      <CollapsibleTrigger asChild>
+        <button
+          type="button"
+          className="flex items-center justify-between w-full text-xs font-medium text-muted-foreground hover:text-foreground py-1"
+        >
+          <span>Criterios de aceptación ({criteria.length})</span>
+          <ChevronDown className="w-3.5 h-3.5" />
+        </button>
+      </CollapsibleTrigger>
+
+      <CollapsibleContent className="space-y-2 pt-1">
+        {criteria.map((c) => (
+          <div key={c.id} className="border rounded-md p-2 space-y-1 text-xs">
+            {c.code && <span className="font-mono font-bold text-neutral-500">{c.code}</span>}
+            {c.dado || c.cuando || c.entonces ? (
+              <>
+                {c.dado && (
+                  <p>
+                    <span className="font-semibold">Dado</span> {c.dado}
+                  </p>
+                )}
+                {c.cuando && (
+                  <p>
+                    <span className="font-semibold">Cuando</span> {c.cuando}
+                  </p>
+                )}
+                {c.entonces && (
+                  <p>
+                    <span className="font-semibold">Entonces</span> {c.entonces}
+                  </p>
+                )}
+              </>
+            ) : (
+              <p className="text-muted-foreground">{c.texto_completo}</p>
+            )}
+          </div>
+        ))}
       </CollapsibleContent>
     </Collapsible>
   );
