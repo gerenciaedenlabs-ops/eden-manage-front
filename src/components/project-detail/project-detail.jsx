@@ -13,6 +13,12 @@ import {
   Search,
   LayoutGrid,
   Network,
+  GitBranch,
+  ExternalLink,
+  Link2,
+  X,
+  Lock,
+  Globe,
 } from "lucide-react";
 import {
   DndContext,
@@ -45,6 +51,7 @@ import EditProjectTask from "@components/project-detail/modal/edit-project-detai
 import DeleteProjectTask from "@components/project-detail/modal/delete-project-detail.jsx";
 import ImportTasksModal from "@components/project-detail/modal/import-tasks-modal.jsx";
 import AddTaskModal from "@components/project-detail/modal/add-task-modal.jsx";
+import LinkRepoModal from "@components/project-detail/modal/link-repo-modal.jsx";
 import HierarchyView from "@components/project-detail/hierarchy-view.jsx";
 import {
   column_translations,
@@ -251,12 +258,15 @@ export default function ProjectDetail({
   const [infoDeleteModal, setInfoDeleteModal] = useState(false);
   const [openImportModal, setOpenImportModal] = useState(false);
   const [openAddModal, setOpenAddModal] = useState(false);
+  const [openLinkRepoModal, setOpenLinkRepoModal] = useState(false);
 
   const [tasks, setTasks] = useState({
     pending: [],
     inProgress: [],
     completed: [],
   });
+
+  const [repositories, setRepositories] = useState([]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -292,6 +302,45 @@ export default function ProjectDetail({
   useEffect(() => {
     getProjectDetails();
   }, [urlApi, project.id]);
+
+  const getProjectRepositories = async () => {
+    try {
+      const response = await axios.get(`${urlApi}project/${project.id}/repositories`, {
+        headers: authHeaders(),
+      });
+      if (response.data.status === "ok") setRepositories(response.data.data);
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  useEffect(() => {
+    getProjectRepositories();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [urlApi, project.id]);
+
+  const handleUnlinkRepo = (repo) => {
+    if (!window.confirm(`¿Desvincular "${repo.repo_full_name}" de este proyecto? (no se elimina en GitHub)`)) return;
+
+    toast.promise(
+      axios
+        .delete(`${urlApi}project/${project.id}/repositories/${repo.id}`, {
+          headers: authHeaders(),
+        })
+        .then((response) => {
+          if (response.data.status === "ok") {
+            getProjectRepositories();
+            return "Repositorio desvinculado";
+          }
+          throw new Error(response.data.message || "Error al desvincular");
+        }),
+      {
+        loading: "Desvinculando...",
+        success: (msg) => msg,
+        error: (err) => err.response?.data?.message || err.message || "Error en la solicitud",
+      }
+    );
+  };
 
   const onMoveTask = async (idTask, statusTask) => {
     const moveIn = { status: statusTask };
@@ -510,6 +559,61 @@ export default function ProjectDetail({
           <ArrowLeft /> Volver
         </Button>
         <h1 className="text-3xl font-bold">{project?.title}</h1>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        {repositories.map((repo) => (
+          <span
+            key={repo.id}
+            className="group inline-flex items-center gap-1.5 rounded-full border bg-neutral-50 pl-3 pr-1.5 py-1 text-xs font-medium text-neutral-700"
+          >
+            <GitBranch className="w-3.5 h-3.5 text-muted-foreground" />
+            <a
+              href={repo.repo_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:underline"
+            >
+              {repo.repo_full_name}
+            </a>
+            {repo.is_private ? (
+              <Lock className="w-3 h-3 text-muted-foreground" />
+            ) : (
+              <Globe className="w-3 h-3 text-muted-foreground" />
+            )}
+            <a
+              href={repo.repo_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-muted-foreground hover:text-foreground"
+              title="Abrir en GitHub"
+            >
+              <ExternalLink className="w-3 h-3" />
+            </a>
+            {userIsAdmin && (
+              <button
+                type="button"
+                onClick={() => handleUnlinkRepo(repo)}
+                className="rounded-full p-0.5 text-muted-foreground opacity-0 group-hover:opacity-100 hover:bg-neutral-200 hover:text-foreground"
+                title="Desvincular"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            )}
+          </span>
+        ))}
+
+        {userIsAdmin && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 text-xs text-muted-foreground"
+            onClick={() => setOpenLinkRepoModal(true)}
+          >
+            <Link2 className="w-3.5 h-3.5 mr-1" />
+            {repositories.length === 0 ? "Vincular repositorio" : "Vincular otro"}
+          </Button>
+        )}
       </div>
 
       {projectProgress.total > 0 && (
@@ -772,6 +876,14 @@ export default function ProjectDetail({
         projectId={project.id}
         collaborators={collaborators}
         refresh={getProjectDetails}
+      />
+
+      <LinkRepoModal
+        isOpen={openLinkRepoModal}
+        onClose={() => setOpenLinkRepoModal(false)}
+        urlApi={urlApi}
+        projectId={project.id}
+        refresh={getProjectRepositories}
       />
     </div>
   );
