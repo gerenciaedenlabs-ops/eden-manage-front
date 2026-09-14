@@ -11,6 +11,8 @@ import {
   ListTree,
   Upload,
   Search,
+  LayoutGrid,
+  Network,
 } from "lucide-react";
 import {
   DndContext,
@@ -43,6 +45,7 @@ import EditProjectTask from "@components/project-detail/modal/edit-project-detai
 import DeleteProjectTask from "@components/project-detail/modal/delete-project-detail.jsx";
 import ImportTasksModal from "@components/project-detail/modal/import-tasks-modal.jsx";
 import AddTaskModal from "@components/project-detail/modal/add-task-modal.jsx";
+import HierarchyView from "@components/project-detail/hierarchy-view.jsx";
 import {
   column_translations,
   columns,
@@ -54,7 +57,13 @@ import {
   authHeaders,
   canEditTask,
 } from "@components/project-detail/task-constants.js";
-import { MoveStatusButtons, DueDateBadge, Avatar } from "@components/project-detail/task-shared.jsx";
+import {
+  MoveStatusButtons,
+  DueDateBadge,
+  Avatar,
+  PriorityBadge,
+  ModuleChip,
+} from "@components/project-detail/task-shared.jsx";
 
 const ALL = "all";
 
@@ -142,8 +151,10 @@ function TaskCard({ task, column, onView, onEdit, onDelete, onMove }) {
 
         <p className="text-xs text-muted-foreground truncate">{task.description}</p>
 
-        {(task.tags || task.due_date || subtasksCount > 0 || checklistCount > 0) && (
+        {(task.tags || task.due_date || task.module_code || task.priority || subtasksCount > 0 || checklistCount > 0) && (
           <div className="flex flex-wrap gap-1.5">
+            {task.module_code && <ModuleChip code={task.module_code} />}
+            {task.priority && <PriorityBadge priority={task.priority} />}
             {task.tags && (
               <span
                 style={{ backgroundColor: tagColor.bg, color: tagColor.text }}
@@ -227,6 +238,10 @@ export default function ProjectDetail({
   const [searchQuery, setSearchQuery] = useState("");
   const [filterCollaborator, setFilterCollaborator] = useState(ALL);
   const [filterTag, setFilterTag] = useState(ALL);
+  const [filterModule, setFilterModule] = useState(ALL);
+  const [filterPriority, setFilterPriority] = useState(ALL);
+  const [filterRelease, setFilterRelease] = useState(ALL);
+  const [viewMode, setViewMode] = useState("kanban");
 
   const [openViewModal, setOpenViewModal] = useState(false);
   const [infoViewModal, setInfoViewModal] = useState(false);
@@ -325,6 +340,10 @@ export default function ProjectDetail({
             ...t,
             description: detail.description,
             description_truncated: false,
+            business_rules: detail.business_rules,
+            ux_notes: detail.ux_notes,
+            dependencies_raw: detail.dependencies_raw,
+            acceptance_criteria: detail.acceptance_criteria,
             subtasks: (t.subtasks || []).map((s) => {
               const full = detail.subtasks?.find((fs) => fs.id === s.id);
               return full ? { ...s, description: full.description, description_truncated: false } : s;
@@ -353,8 +372,13 @@ export default function ProjectDetail({
     setOpenViewModal(true);
     setInfoViewModal(task);
 
+    // Las historias importadas del catálogo ERP nunca traen sus criterios de
+    // aceptación (ni reglas de negocio/notas UX) en el listado liviano del
+    // tablero, así que siempre se completan al abrir el detalle.
     const needsDetail =
-      task.description_truncated || task.subtasks?.some((s) => s.description_truncated);
+      task.description_truncated ||
+      task.subtasks?.some((s) => s.description_truncated) ||
+      !!task.external_code;
 
     if (needsDetail) {
       axios
@@ -410,6 +434,29 @@ export default function ProjectDetail({
     return [...TASK_TAGS, ...Array.from(legacyTags).sort()];
   }, [tasks]);
 
+  // Solo hay datos de catálogo ERP (módulo/prioridad/release) si el proyecto
+  // tuvo al menos un import desde ese formato — en cualquier otro proyecto
+  // estas listas quedan vacías y sus filtros/el toggle de vista no aparecen.
+  const allModules = useMemo(() => {
+    const byCode = new Map();
+    columns.forEach((col) =>
+      tasks[col].forEach((t) => {
+        if (t.module_code && !byCode.has(t.module_code)) byCode.set(t.module_code, t.module_name);
+      }),
+    );
+    return Array.from(byCode.entries())
+      .map(([code, name]) => ({ code, name }))
+      .sort((a, b) => a.code.localeCompare(b.code));
+  }, [tasks]);
+
+  const allReleases = useMemo(() => {
+    const set = new Set();
+    columns.forEach((col) => tasks[col].forEach((t) => t.release_tag && set.add(t.release_tag)));
+    return Array.from(set).sort();
+  }, [tasks]);
+
+  const hasErpData = allModules.length > 0;
+
   const filteredTasks = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
     const collaboratorFilter =
@@ -434,12 +481,21 @@ export default function ProjectDetail({
         if (filterTag !== ALL && task.tags !== filterTag) {
           return false;
         }
+        if (filterModule !== ALL && task.module_code !== filterModule) {
+          return false;
+        }
+        if (filterPriority !== ALL && task.priority !== filterPriority) {
+          return false;
+        }
+        if (filterRelease !== ALL && task.release_tag !== filterRelease) {
+          return false;
+        }
         return true;
       });
     });
 
     return result;
-  }, [tasks, searchQuery, filterCollaborator, filterTag, collaborators]);
+  }, [tasks, searchQuery, filterCollaborator, filterTag, filterModule, filterPriority, filterRelease, collaborators]);
 
   const projectProgress = useMemo(() => {
     const total = columns.reduce((sum, col) => sum + tasks[col].length, 0);
@@ -545,6 +601,75 @@ export default function ProjectDetail({
           </SelectContent>
         </Select>
 
+        {hasErpData && (
+          <>
+            <Select value={filterModule} onValueChange={setFilterModule}>
+              <SelectTrigger className="sm:w-44">
+                <SelectValue placeholder="Módulo" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL}>Todos los módulos</SelectItem>
+                {allModules.map((m) => (
+                  <SelectItem key={m.code} value={m.code}>
+                    {m.code} · {m.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Select value={filterPriority} onValueChange={setFilterPriority}>
+              <SelectTrigger className="sm:w-36">
+                <SelectValue placeholder="Prioridad" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL}>Toda prioridad</SelectItem>
+                <SelectItem value="Must">Must</SelectItem>
+                <SelectItem value="Should">Should</SelectItem>
+                <SelectItem value="Could">Could</SelectItem>
+              </SelectContent>
+            </Select>
+
+            {allReleases.length > 0 && (
+              <Select value={filterRelease} onValueChange={setFilterRelease}>
+                <SelectTrigger className="sm:w-32">
+                  <SelectValue placeholder="Release" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={ALL}>Todo release</SelectItem>
+                  {allReleases.map((r) => (
+                    <SelectItem key={r} value={r}>
+                      {r}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+
+            <div className="flex rounded-md border p-0.5">
+              <Button
+                type="button"
+                variant={viewMode === "kanban" ? "default" : "ghost"}
+                size="sm"
+                className="h-7 px-2"
+                onClick={() => setViewMode("kanban")}
+                title="Vista Kanban"
+              >
+                <LayoutGrid className="w-4 h-4" />
+              </Button>
+              <Button
+                type="button"
+                variant={viewMode === "hierarchy" ? "default" : "ghost"}
+                size="sm"
+                className="h-7 px-2"
+                onClick={() => setViewMode("hierarchy")}
+                title="Vista jerárquica (Módulo › Épica › Historia)"
+              >
+                <Network className="w-4 h-4" />
+              </Button>
+            </div>
+          </>
+        )}
+
         {userIsAdmin && (
           <>
             <Button variant="outline" onClick={() => setOpenImportModal(true)} className="whitespace-nowrap">
@@ -559,6 +684,9 @@ export default function ProjectDetail({
         )}
       </div>
 
+      {viewMode === "hierarchy" ? (
+        <HierarchyView tasks={filteredTasks} onView={handleViewTask} />
+      ) : (
       <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
         <div className="grid gap-5 md:grid-cols-3 items-start">
           {columns.map((column) => {
@@ -599,6 +727,7 @@ export default function ProjectDetail({
           })}
         </div>
       </DndContext>
+      )}
 
       <ViewProjectTask
         isOpen={openViewModal}

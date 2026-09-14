@@ -155,16 +155,296 @@ const detectAndParseSheet = (rawRows) => {
   return [];
 };
 
+// ============================================================================
+// Plantilla "catálogo ERP": workbook con hoja "Historias de Usuario" (Módulo/
+// Épica/Rol (Como)/Historia de usuario/Prioridad/Release/Puntos/Caso de uso/
+// Estado) más, opcionalmente, "Criterios de aceptación" (Dado/Cuando/Entonces
+// por historia), "Módulos", "Casos de Uso" y "Roles". A diferencia de las dos
+// plantillas de arriba (que se detectan y parsean hoja por hoja), esta se
+// detecta a nivel de todo el workbook porque necesita cruzar varias hojas, y
+// se manda a un endpoint distinto (/import-erp-catalog) que sí entiende ese
+// catálogo relacional. Ver manager.controller.js para el lado del backend.
+// ============================================================================
+
+const findSheetByName = (workbook, normalizedTarget) => {
+  const match = workbook.SheetNames.find((name) => normalize(name) === normalizedTarget);
+  return match ? workbook.Sheets[match] : null;
+};
+
+// Encabezados en la fila 1 (Historias de Usuario, Criterios de aceptación):
+// alcanza con sheet_to_json normal. Módulos/Roles/Casos de Uso traen un
+// título y subtítulo antes de la fila de encabezados real (fila 4 en el
+// archivo original) — se busca esa fila buscando la primera que contenga
+// todas las pistas de encabezado pedidas.
+const sheetRowsFromHeaderRow = (sheet, headerHints) => {
+  const raw = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
+  const headerRowIndex = raw.findIndex((row) => {
+    const normalizedCells = row.map((c) => normalize(c));
+    return headerHints.every((hint) => normalizedCells.some((c) => c.includes(hint)));
+  });
+  if (headerRowIndex === -1) return [];
+
+  const headers = raw[headerRowIndex];
+  return raw
+    .slice(headerRowIndex + 1)
+    .filter((row) => row.some((c) => String(c).trim() !== ""))
+    .map((row) => {
+      const obj = {};
+      headers.forEach((h, i) => {
+        if (h) obj[h] = row[i] ?? "";
+      });
+      return obj;
+    });
+};
+
+// "Backlog"/vacío → pending, "En desarrollo" → inProgress, "Terminada" →
+// completed. Vocabulario propio de este formato (distinto de mapEstado, que
+// usa "Hecha"/"Parcial"/"Implementado").
+const mapEstadoHu = (estado) => {
+  const norm = normalize(estado);
+  if (norm === "terminada") return "completed";
+  if (norm === "en desarrollo") return "inProgress";
+  return "pending";
+};
+
+// Cada criterio de la columna "Criterios de aceptación" de la HU viene
+// concatenado como "CA1. texto...\nCA2. texto..." — se usa como respaldo
+// cuando no hay hoja "Criterios de aceptación" aparte (o una HU no aparece
+// en ella), aunque sin el desglose Dado/Cuando/Entonces de esa hoja.
+const CA_SPLIT_REGEX = /(?=CA\d+\.)/g;
+const CA_LINE_REGEX = /^(CA\d+)\.\s*([\s\S]*)$/;
+
+const splitInlineCriteria = (text) => {
+  if (!text) return [];
+  return text
+    .split(CA_SPLIT_REGEX)
+    .map((chunk) => chunk.trim())
+    .filter(Boolean)
+    .map((chunk) => {
+      const match = chunk.match(CA_LINE_REGEX);
+      return match
+        ? { code: match[1], texto_completo: match[2].trim() }
+        : { code: null, texto_completo: chunk };
+    });
+};
+
+const detectErpCatalogSheet = (workbook) => {
+  const huSheet = findSheetByName(workbook, "historias de usuario");
+  if (!huSheet) return null;
+
+  const rawRows = XLSX.utils.sheet_to_json(huSheet, { defval: "" });
+  if (rawRows.length === 0) return null;
+
+  const headers = Object.keys(rawRows[0]).map(normalize);
+  const isErpCatalog =
+    headers.some((h) => h.includes("rol (como)")) ||
+    (headers.includes("modulo") && headers.some((h) => h.includes("caso de uso")));
+
+  return isErpCatalog ? huSheet : null;
+};
+
+const parseErpStoriesSheet = (sheet) => {
+  const rawRows = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+
+  return rawRows
+    .map((rawRow) => {
+      const s = {
+        external_code: "",
+        module_code: "",
+        epic_name: "",
+        title: "",
+        role_name: "",
+        story_text: "",
+        raw_criteria: "",
+        business_rules: "",
+        ux_notes: "",
+        priority: "",
+        release_tag: "",
+        story_points: "",
+        dependencies_raw: "",
+        use_case_code: "",
+        tags: "",
+        status: "pending",
+      };
+
+      for (const key of Object.keys(rawRow)) {
+        const norm = normalize(key);
+        const value = rawRow[key];
+        const str = String(value ?? "").trim();
+
+        if (norm === "id") s.external_code = str;
+        else if (norm === "modulo") s.module_code = str;
+        else if (norm === "epica") s.epic_name = str;
+        else if (norm === "titulo") s.title = str;
+        else if (norm.startsWith("rol")) s.role_name = str;
+        else if (norm === "historia de usuario") s.story_text = String(value ?? "");
+        else if (norm.includes("criterios de aceptacion")) s.raw_criteria = String(value ?? "");
+        else if (norm.includes("reglas de negocio")) s.business_rules = String(value ?? "");
+        else if (norm.includes("notas de ux")) s.ux_notes = String(value ?? "");
+        else if (norm === "prioridad") s.priority = str;
+        else if (norm === "release") s.release_tag = str;
+        else if (norm === "puntos") s.story_points = str;
+        else if (norm === "dependencias") s.dependencies_raw = str === "—" ? "" : str;
+        else if (norm.includes("caso de uso")) s.use_case_code = str;
+        else if (norm === "etiquetas") s.tags = str;
+        else if (norm === "estado") s.status = mapEstadoHu(value);
+      }
+
+      return s;
+    })
+    .filter((s) => s.title);
+};
+
+const parseErpCriteriaSheet = (sheet) => {
+  if (!sheet) return {};
+  const rawRows = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+  const byHuCode = {};
+
+  rawRows.forEach((rawRow) => {
+    let huCode = "";
+    let code = "";
+    let dado = "";
+    let cuando = "";
+    let entonces = "";
+    let texto_completo = "";
+    let resultado_prueba = "";
+
+    for (const key of Object.keys(rawRow)) {
+      const norm = normalize(key);
+      const value = String(rawRow[key] ?? "").trim();
+
+      if (norm === "id hu") huCode = value;
+      else if (norm.startsWith("n") && norm.length <= 2) code = value; // "N°"
+      else if (norm.startsWith("dado")) dado = value;
+      else if (norm.startsWith("cuando")) cuando = value;
+      else if (norm.startsWith("entonces")) entonces = value;
+      else if (norm.includes("criterio completo")) texto_completo = value;
+      else if (norm.includes("resultado")) resultado_prueba = value;
+    }
+
+    if (!huCode) return;
+    if (!byHuCode[huCode]) byHuCode[huCode] = [];
+    byHuCode[huCode].push({ code, dado, cuando, entonces, texto_completo, resultado_prueba });
+  });
+
+  return byHuCode;
+};
+
+const parseErpModulesSheet = (sheet) => {
+  if (!sheet) return [];
+  const rawRows = sheetRowsFromHeaderRow(sheet, ["codigo", "modulo"]);
+
+  return rawRows
+    .map((rawRow) => {
+      const m = { code: "", name: "", grupo: "", descripcion: "", objetivo: "", release_base: "" };
+      for (const key of Object.keys(rawRow)) {
+        const norm = normalize(key);
+        const value = String(rawRow[key] ?? "").trim();
+        if (norm === "codigo") m.code = value;
+        else if (norm === "modulo") m.name = value;
+        else if (norm === "grupo") m.grupo = value;
+        else if (norm.includes("release")) m.release_base = value;
+        else if (norm.includes("descripcion")) m.descripcion = value;
+        else if (norm.includes("objetivo")) m.objetivo = value;
+      }
+      return m;
+    })
+    .filter((m) => m.code);
+};
+
+const parseErpRolesSheet = (sheet) => {
+  if (!sheet) return [];
+  const rawRows = sheetRowsFromHeaderRow(sheet, ["rol", "tipo"]);
+
+  return rawRows
+    .map((rawRow) => {
+      const r = { name: "", tipo: "", descripcion: "" };
+      for (const key of Object.keys(rawRow)) {
+        const norm = normalize(key);
+        const value = String(rawRow[key] ?? "").trim();
+        // startsWith en vez de includes: "N° HUs como rol principal" también
+        // contiene "rol" y pisaría el nombre real con una celda vacía si se
+        // matcheara por substring en cualquier posición.
+        if (norm.startsWith("rol")) r.name = value;
+        else if (norm === "tipo") r.tipo = value;
+        else if (norm.includes("descripcion")) r.descripcion = value;
+      }
+      return r;
+    })
+    .filter((r) => r.name);
+};
+
+const parseErpUseCasesSheet = (sheet) => {
+  if (!sheet) return [];
+  const rawRows = sheetRowsFromHeaderRow(sheet, ["id", "caso de uso"]);
+
+  return rawRows
+    .map((rawRow) => {
+      const uc = {
+        code: "",
+        module_code: "",
+        name: "",
+        actor_principal: "",
+        actores_secundarios: "",
+        objetivo: "",
+        release_minimo: "",
+      };
+      for (const key of Object.keys(rawRow)) {
+        const norm = normalize(key);
+        const value = String(rawRow[key] ?? "").trim();
+        if (norm === "id") uc.code = value;
+        else if (norm === "modulo") uc.module_code = value;
+        else if (norm === "caso de uso") uc.name = value;
+        else if (norm.includes("actor principal")) uc.actor_principal = value;
+        else if (norm.includes("actores")) uc.actores_secundarios = value;
+        else if (norm.includes("objetivo")) uc.objetivo = value;
+        else if (norm.includes("release")) uc.release_minimo = value;
+      }
+      return uc;
+    })
+    .filter((uc) => uc.code);
+};
+
+// Punto de entrada del modo "catálogo ERP": si el workbook trae una hoja
+// "Historias de Usuario" con las columnas de este formato, arma el payload
+// completo cruzando el resto de hojas que estén presentes (todas opcionales
+// salvo Historias de Usuario). Devuelve null si el workbook no aplica, para
+// que el caller siga con la detección hoja por hoja de las plantillas viejas.
+const parseErpCatalogWorkbook = (workbook) => {
+  const huSheet = detectErpCatalogSheet(workbook);
+  if (!huSheet) return null;
+
+  const stories = parseErpStoriesSheet(huSheet);
+  if (stories.length === 0) return null;
+
+  const criteriaByHuCode = parseErpCriteriaSheet(findSheetByName(workbook, "criterios de aceptacion"));
+  const modules = parseErpModulesSheet(findSheetByName(workbook, "modulos"));
+  const roles = parseErpRolesSheet(findSheetByName(workbook, "roles"));
+  const useCases = parseErpUseCasesSheet(findSheetByName(workbook, "casos de uso"));
+
+  stories.forEach((s) => {
+    const fromSheet = criteriaByHuCode[s.external_code];
+    s.criteria = fromSheet && fromSheet.length > 0 ? fromSheet : splitInlineCriteria(s.raw_criteria);
+  });
+
+  return { mode: "erp-catalog", stories, modules, roles, useCases };
+};
+
 const parseWorkbook = (arrayBuffer) => {
   const workbook = XLSX.read(arrayBuffer, { type: "array" });
 
-  return workbook.SheetNames.map((sheetName) => {
+  const erpCatalog = parseErpCatalogWorkbook(workbook);
+  if (erpCatalog) return erpCatalog;
+
+  const sheets = workbook.SheetNames.map((sheetName) => {
     const sheet = workbook.Sheets[sheetName];
     const rawRows = XLSX.utils.sheet_to_json(sheet, { defval: "" });
     const rows = detectAndParseSheet(rawRows);
 
     return { sheetName, rows, included: true };
   }).filter((sheet) => sheet.rows.length > 0);
+
+  return { mode: "legacy", sheets };
 };
 
 export default function ImportTasksModal({
@@ -175,12 +455,12 @@ export default function ImportTasksModal({
   refresh,
 }) {
   const [fileName, setFileName] = useState("");
-  const [sheets, setSheets] = useState([]);
+  const [parsed, setParsed] = useState(null);
   const [importing, setImporting] = useState(false);
 
   const resetState = () => {
     setFileName("");
-    setSheets([]);
+    setParsed(null);
   };
 
   const handleClose = () => {
@@ -197,11 +477,13 @@ export default function ImportTasksModal({
     const reader = new FileReader();
     reader.onload = (e) => {
       try {
-        const parsed = parseWorkbook(e.target.result);
-        setSheets(parsed);
-        if (parsed.length === 0) {
+        const result = parseWorkbook(e.target.result);
+        setParsed(result);
+
+        const isEmpty = result.mode === "erp-catalog" ? result.stories.length === 0 : result.sheets.length === 0;
+        if (isEmpty) {
           toast.error(
-            "No se encontraron filas con columnas reconocibles (ni la plantilla Tipo/Título/Tags/Descripción/Padre, ni la de Épica/ID HU/Historia de Usuario/Subtarea)."
+            "No se encontraron filas con columnas reconocibles (ni el catálogo ERP con hoja \"Historias de Usuario\", ni la plantilla Tipo/Título/Tags/Descripción/Padre, ni la de Épica/ID HU/Historia de Usuario/Subtarea)."
           );
         }
       } catch (error) {
@@ -213,17 +495,17 @@ export default function ImportTasksModal({
   };
 
   const toggleSheet = (sheetName) => {
-    setSheets((prev) =>
-      prev.map((sheet) =>
-        sheet.sheetName === sheetName
-          ? { ...sheet, included: !sheet.included }
-          : sheet
-      )
-    );
+    setParsed((prev) => ({
+      ...prev,
+      sheets: prev.sheets.map((sheet) =>
+        sheet.sheetName === sheetName ? { ...sheet, included: !sheet.included } : sheet
+      ),
+    }));
   };
 
-  const includedSheets = sheets.filter((sheet) => sheet.included);
-  const totals = includedSheets.reduce(
+  const includedSheets = parsed?.mode === "legacy" ? parsed.sheets.filter((sheet) => sheet.included) : [];
+
+  const legacyTotals = includedSheets.reduce(
     (acc, sheet) => {
       for (const row of sheet.rows) {
         if (row.tipo === "Subtask") acc.subtasks += 1;
@@ -235,33 +517,66 @@ export default function ImportTasksModal({
     { tasks: 0, subtasks: 0, checklist: 0 }
   );
 
-  const handleConfirmImport = () => {
-    const rows = includedSheets.flatMap((sheet) => sheet.rows);
-    if (rows.length === 0) return;
+  const erpTotals =
+    parsed?.mode === "erp-catalog"
+      ? {
+          stories: parsed.stories.length,
+          criteria: parsed.stories.reduce((sum, s) => sum + (s.criteria?.length || 0), 0),
+          modules: parsed.modules.length,
+          roles: parsed.roles.length,
+          useCases: parsed.useCases.length,
+        }
+      : null;
 
+  const canImport =
+    parsed?.mode === "erp-catalog" ? parsed.stories.length > 0 : includedSheets.length > 0;
+
+  const handleConfirmImport = () => {
+    if (!canImport) return;
     setImporting(true);
 
+    const request =
+      parsed.mode === "erp-catalog"
+        ? axios.post(
+            `${urlApi}project/${projectId}/import-erp-catalog`,
+            {
+              stories: parsed.stories,
+              modules: parsed.modules,
+              roles: parsed.roles,
+              useCases: parsed.useCases,
+              created_by: getCurrentUserId(),
+            },
+            { headers: authHeaders() }
+          )
+        : axios.post(
+            `${urlApi}project/${projectId}/import-tasks`,
+            { rows: includedSheets.flatMap((sheet) => sheet.rows), created_by: getCurrentUserId() },
+            { headers: authHeaders() }
+          );
+
     toast.promise(
-      axios
-        .post(
-          `${urlApi}project/${projectId}/import-tasks`,
-          { rows, created_by: getCurrentUserId() },
-          { headers: authHeaders() }
-        )
+      request
         .then((response) => {
-          if (response.data.status === "ok") {
-            const { tasks, subtasks, checklist_items } = response.data.created;
-            const { tasks: tasksUpdated, subtasks: subtasksUpdated } = response.data.updated || {};
-            refresh();
-            handleClose();
-            return `Creadas ${tasks} tareas y ${subtasks} subtareas (+${checklist_items} items de checklist). Actualizado el estado de ${tasksUpdated || 0} tareas y ${subtasksUpdated || 0} subtareas ya existentes.`;
-          } else {
+          if (response.data.status !== "ok") {
             throw new Error(response.data.message || "Error al importar");
           }
+
+          refresh();
+          handleClose();
+
+          if (parsed.mode === "erp-catalog") {
+            const { tasks, criteria, modules, roles, use_cases: useCases } = response.data.created;
+            const { tasks: tasksUpdated } = response.data.updated || {};
+            return `Creadas ${tasks} historias nuevas (+${tasksUpdated || 0} actualizadas) con ${criteria} criterios de aceptación, ${modules} módulos, ${roles} roles y ${useCases} casos de uso.`;
+          }
+
+          const { tasks, subtasks, checklist_items } = response.data.created;
+          const { tasks: tasksUpdated, subtasks: subtasksUpdated } = response.data.updated || {};
+          return `Creadas ${tasks} tareas y ${subtasks} subtareas (+${checklist_items} items de checklist). Actualizado el estado de ${tasksUpdated || 0} tareas y ${subtasksUpdated || 0} subtareas ya existentes.`;
         })
         .finally(() => setImporting(false)),
       {
-        loading: "Importando tareas...",
+        loading: "Importando...",
         success: (msg) => msg,
         error: (err) => err.message || "Error en la solicitud de importación",
       }
@@ -294,15 +609,14 @@ export default function ImportTasksModal({
 
       <CardContent className="space-y-4">
         <p className="text-sm text-muted-foreground">
-          Se reconocen dos plantillas: una plana con columnas{" "}
-          <strong>Tipo</strong> (US/Task o Subtask), <strong>Título</strong>,{" "}
-          <strong>Tags</strong>, <strong>Descripción</strong> y{" "}
-          <strong>Padre (si es subtask)</strong>; o un backlog de HUs con{" "}
-          <strong>Épica</strong>, <strong>ID HU</strong>,{" "}
-          <strong>Historia de Usuario</strong>, <strong>Estado HU</strong>,{" "}
-          <strong>Subtarea</strong> y <strong>Estado subtarea</strong>{" "}
-          agrupadas por fila. Las tareas se crean dentro de este proyecto, sin
-          colaborador asignado (lo asignas después manualmente).
+          Se reconocen tres formatos: un <strong>catálogo ERP</strong> (hoja
+          &ldquo;Historias de Usuario&rdquo; con Módulo/Épica/Rol/Prioridad/Release/Caso de
+          uso, más opcionalmente Criterios de aceptación/Módulos/Casos de
+          Uso/Roles); una plantilla plana con{" "}
+          <strong>Tipo/Título/Tags/Descripción/Padre</strong>; o un backlog de
+          HUs con <strong>Épica/ID HU/Historia de Usuario/Subtarea</strong>{" "}
+          agrupadas por fila. Las tareas se crean sin colaborador asignado (lo
+          asignas después manualmente).
         </p>
 
         <label className="flex items-center gap-2 border rounded-md p-3 cursor-pointer hover:bg-muted/50">
@@ -318,10 +632,27 @@ export default function ImportTasksModal({
           />
         </label>
 
-        {sheets.length > 0 && (
+        {parsed?.mode === "erp-catalog" && (
+          <div className="text-sm bg-muted/50 rounded-md p-3 space-y-1">
+            <p>
+              Catálogo ERP detectado: <strong>{erpTotals.stories}</strong>{" "}
+              historias de usuario con <strong>{erpTotals.criteria}</strong>{" "}
+              criterios de aceptación, <strong>{erpTotals.modules}</strong>{" "}
+              módulos, <strong>{erpTotals.roles}</strong> roles y{" "}
+              <strong>{erpTotals.useCases}</strong> casos de uso.
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Las historias que ya existan en este proyecto (mismo código,
+              ej. HU-ADM-001) se actualizan en vez de duplicarse; sus
+              criterios de aceptación se reemplazan por los de la hoja.
+            </p>
+          </div>
+        )}
+
+        {parsed?.mode === "legacy" && parsed.sheets.length > 0 && (
           <div className="space-y-3">
             <div className="space-y-2 max-h-52 overflow-y-auto border rounded-md p-2">
-              {sheets.map((sheet) => (
+              {parsed.sheets.map((sheet) => (
                 <label
                   key={sheet.sheetName}
                   className="flex items-center gap-2 text-sm cursor-pointer"
@@ -340,10 +671,10 @@ export default function ImportTasksModal({
 
             <div className="text-sm bg-muted/50 rounded-md p-3 space-y-1">
               <p>
-                Se procesarán <strong>{totals.tasks}</strong> tareas y{" "}
-                <strong>{totals.subtasks}</strong> subtareas (con aprox.{" "}
-                <strong>{totals.checklist}</strong> items de checklist para
-                las nuevas). Las que ya existan en este proyecto (mismo
+                Se procesarán <strong>{legacyTotals.tasks}</strong> tareas y{" "}
+                <strong>{legacyTotals.subtasks}</strong> subtareas (con aprox.{" "}
+                <strong>{legacyTotals.checklist}</strong> items de checklist
+                para las nuevas). Las que ya existan en este proyecto (mismo
                 título) se actualizan de estado en vez de duplicarse.
               </p>
             </div>
@@ -352,7 +683,7 @@ export default function ImportTasksModal({
 
         <Button
           className="w-full"
-          disabled={includedSheets.length === 0 || importing}
+          disabled={!canImport || importing}
           onClick={handleConfirmImport}
         >
           {importing ? "Importando..." : "Confirmar importación"}
