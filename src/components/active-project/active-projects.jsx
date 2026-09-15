@@ -13,6 +13,7 @@ import EditProjectActive from "@components/active-project/modal/edit-active-proj
 import DeleteProjectActive from "@components/active-project/modal/delete-active-project.jsx";
 import ViewProjectActive from "@components/active-project/modal/view-active-project.jsx";
 import { ProgressRing, StatusBadge, ProjectsStatsRow, PageHeaderIcon } from "@components/projects-shared.jsx";
+import { authHeaders } from "@components/project-detail/task-constants.js";
 
 export default function ActiveProjects({ urlApi, onViewDetails }) {
   const [listActive, setListActive] = useState([]);
@@ -27,9 +28,7 @@ export default function ActiveProjects({ urlApi, onViewDetails }) {
   function getProjectActive() {
     axios
       .get(`${urlApi}project/project-active`, {
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: authHeaders(),
       })
       .then((response) => {
         setListActive(response.data.data);

@@ -19,6 +19,7 @@ import {
   X,
   Lock,
   Globe,
+  Users,
 } from "lucide-react";
 import {
   DndContext,
@@ -52,6 +53,7 @@ import DeleteProjectTask from "@components/project-detail/modal/delete-project-d
 import ImportTasksModal from "@components/project-detail/modal/import-tasks-modal.jsx";
 import AddTaskModal from "@components/project-detail/modal/add-task-modal.jsx";
 import LinkRepoModal from "@components/project-detail/modal/link-repo-modal.jsx";
+import AssignDevelopersModal from "@components/project-detail/modal/assign-developers-modal.jsx";
 import HierarchyView from "@components/project-detail/hierarchy-view.jsx";
 import {
   column_translations,
@@ -259,6 +261,7 @@ export default function ProjectDetail({
   const [openImportModal, setOpenImportModal] = useState(false);
   const [openAddModal, setOpenAddModal] = useState(false);
   const [openLinkRepoModal, setOpenLinkRepoModal] = useState(false);
+  const [openAssignDevsModal, setOpenAssignDevsModal] = useState(false);
 
   const [tasks, setTasks] = useState({
     pending: [],
@@ -604,15 +607,27 @@ export default function ProjectDetail({
         ))}
 
         {userIsAdmin && (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-7 text-xs text-muted-foreground"
-            onClick={() => setOpenLinkRepoModal(true)}
-          >
-            <Link2 className="w-3.5 h-3.5 mr-1" />
-            {repositories.length === 0 ? "Vincular repositorio" : "Vincular otro"}
-          </Button>
+          <>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 text-xs text-muted-foreground"
+              onClick={() => setOpenLinkRepoModal(true)}
+            >
+              <Link2 className="w-3.5 h-3.5 mr-1" />
+              {repositories.length === 0 ? "Vincular repositorio" : "Vincular otro"}
+            </Button>
+
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 text-xs text-muted-foreground"
+              onClick={() => setOpenAssignDevsModal(true)}
+            >
+              <Users className="w-3.5 h-3.5 mr-1" />
+              Desarrolladores con acceso
+            </Button>
+          </>
         )}
       </div>
 
@@ -866,6 +881,7 @@ export default function ProjectDetail({
         onClose={() => setOpenImportModal(false)}
         urlApi={urlApi}
         projectId={project.id}
+        collaborators={collaborators}
         refresh={getProjectDetails}
       />
 
@@ -884,6 +900,14 @@ export default function ProjectDetail({
         urlApi={urlApi}
         projectId={project.id}
         refresh={getProjectRepositories}
+      />
+
+      <AssignDevelopersModal
+        isOpen={openAssignDevsModal}
+        onClose={() => setOpenAssignDevsModal(false)}
+        urlApi={urlApi}
+        projectId={project.id}
+        collaborators={collaborators}
       />
     </div>
   );
