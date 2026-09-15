@@ -1,5 +1,5 @@
 /* eslint-disable react/prop-types */
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { CardContent, CardHeader, CardTitle } from "@components/ui/card";
 import { Button } from "@components/ui/button";
 import { Checkbox } from "@components/ui/checkbox";
@@ -430,11 +430,163 @@ const parseErpCatalogWorkbook = (workbook) => {
   return { mode: "erp-catalog", stories, modules, roles, useCases };
 };
 
+// ============================================================================
+// Plantilla "cronograma": una hoja con encabezados Fecha/Tarea/Responsable/
+// Estado (el nombre de la hoja no importa, se detecta por esas columnas —
+// cubre exports tipo "Cronograma"/"Schedule" con fila de título antes del
+// encabezado real, igual que Módulos/Roles/Casos de Uso del catálogo ERP).
+// A diferencia de las plantillas plana/agrupada, acá si se manda
+// responsable/fecha al backend (que las usa como assigned_to/due_date en
+// tareas nuevas) — el resto de plantillas deliberadamente no asignan
+// colaborador al importar.
+// ============================================================================
+
+// "04/09/2026" (DD/MM/YYYY, formato de fecha en texto, no celda de fecha real
+// de Excel) -> "2026-09-04" para la columna DATE del backend.
+const DATE_DDMMYYYY_REGEX = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/;
+
+const parseSpanishDate = (value) => {
+  const match = String(value ?? "").trim().match(DATE_DDMMYYYY_REGEX);
+  if (!match) return null;
+  const [, d, m, y] = match;
+  return `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
+};
+
+// "Hecho" → completed, "En progreso" → inProgress, cualquier otra cosa
+// (incluido "Pendiente" o vacío) → pending.
+const mapEstadoSchedule = (estado) => {
+  const norm = normalize(estado);
+  if (norm === "hecho") return "completed";
+  if (norm === "en progreso") return "inProgress";
+  return "pending";
+};
+
+// De "SEMANA 1 (4–10 sep): Base técnica..." se queda solo con "SEMANA 1"
+// para usarlo como tag corto — el texto completo no cabe en un badge.
+const WEEK_TAG_REGEX = /^SEMANA\s+\d+/i;
+const extractWeekTag = (semana) => {
+  const match = String(semana ?? "").match(WEEK_TAG_REGEX);
+  return match ? match[0].toUpperCase() : "";
+};
+
+// Localiza, entre todas las hojas del workbook, la primera cuyo encabezado
+// real (buscado con sheetRowsFromHeaderRow, no necesariamente en la fila 1)
+// tenga Fecha+Tarea+Responsable+Estado juntas.
+const findScheduleSheetRows = (workbook) => {
+  for (const sheetName of workbook.SheetNames) {
+    const sheet = workbook.Sheets[sheetName];
+    const rows = sheetRowsFromHeaderRow(sheet, ["fecha", "tarea", "responsable", "estado"]);
+    if (rows.length > 0) return rows;
+  }
+  return null;
+};
+
+// Fila por tarea con Fecha/Tarea/Responsable/Estado, más la "Semana / Hito"
+// de la última fila-separador de semana vista (esa columna solo viene llena
+// en las filas de encabezado de semana, vacías de Tarea — se arrastra igual
+// que el "currentTitle" de la plantilla agrupada de HUs).
+const parseScheduleRows = (rawRows) => {
+  const rows = [];
+  let currentWeek = "";
+
+  for (const rawRow of rawRows) {
+    let titulo = "";
+    let fecha = "";
+    let responsable = "";
+    let estado = "";
+
+    for (const key of Object.keys(rawRow)) {
+      const norm = normalize(key);
+      const value = rawRow[key];
+
+      if (norm === "tarea") titulo = String(value ?? "").trim();
+      else if (norm === "fecha") fecha = value;
+      else if (norm === "responsable") responsable = String(value ?? "").trim();
+      else if (norm === "estado") estado = String(value ?? "").trim();
+    }
+
+    if (!titulo) {
+      // Fila separadora de semana ("SEMANA 1 (4–10 sep): ..."): en el
+      // .xlsx original es una celda combinada A:F, y tanto Excel como
+      // XLSX.js solo guardan el texto en la PRIMERA columna de ese rango
+      // (acá cae bajo "Fecha", no bajo "Semana / Hito") — por eso se busca
+      // el patrón en cualquier celda de la fila en vez de una columna fija.
+      const weekCandidate = Object.values(rawRow).find((v) => WEEK_TAG_REGEX.test(String(v ?? "")));
+      if (weekCandidate) currentWeek = String(weekCandidate);
+      continue;
+    }
+
+    rows.push({
+      title: titulo,
+      description: "",
+      status: mapEstadoSchedule(estado),
+      due_date: parseSpanishDate(fecha),
+      responsable_name: responsable,
+      tags: extractWeekTag(currentWeek),
+    });
+  }
+
+  return rows;
+};
+
+// Hoja "Hitos clave" (Fecha/Hito/Riesgo si se atrasa), opcional: se importan
+// como tareas de referencia sin colaborador, con el riesgo como descripción.
+const parseMilestoneRows = (sheet) => {
+  if (!sheet) return [];
+  const rawRows = sheetRowsFromHeaderRow(sheet, ["fecha", "hito"]);
+
+  return rawRows
+    .map((rawRow) => {
+      let titulo = "";
+      let fecha = "";
+      let riesgo = "";
+
+      for (const key of Object.keys(rawRow)) {
+        const norm = normalize(key);
+        const value = rawRow[key];
+
+        if (norm === "hito") titulo = String(value ?? "").trim();
+        else if (norm === "fecha") fecha = value;
+        else if (norm.includes("riesgo")) riesgo = String(value ?? "").trim();
+      }
+
+      if (!titulo) return null;
+
+      return {
+        title: `🏁 ${titulo}`,
+        description: riesgo ? `Riesgo si se atrasa: ${riesgo}` : "",
+        status: "pending",
+        due_date: parseSpanishDate(fecha),
+        responsable_name: "",
+        tags: "Hito",
+      };
+    })
+    .filter(Boolean);
+};
+
+// Punto de entrada del modo "cronograma". Devuelve null si el workbook no
+// trae ninguna hoja con esas columnas, para que el caller siga con el
+// catálogo ERP (ya descartado antes de llegar acá) o las plantillas viejas.
+const parseScheduleWorkbook = (workbook) => {
+  const scheduleRawRows = findScheduleSheetRows(workbook);
+  if (!scheduleRawRows) return null;
+
+  const tasks = parseScheduleRows(scheduleRawRows);
+  if (tasks.length === 0) return null;
+
+  const milestones = parseMilestoneRows(findSheetByName(workbook, "hitos clave"));
+
+  return { mode: "schedule", tasks: [...tasks, ...milestones] };
+};
+
 const parseWorkbook = (arrayBuffer) => {
   const workbook = XLSX.read(arrayBuffer, { type: "array" });
 
   const erpCatalog = parseErpCatalogWorkbook(workbook);
   if (erpCatalog) return erpCatalog;
+
+  const schedule = parseScheduleWorkbook(workbook);
+  if (schedule) return schedule;
 
   const sheets = workbook.SheetNames.map((sheetName) => {
     const sheet = workbook.Sheets[sheetName];
@@ -447,11 +599,23 @@ const parseWorkbook = (arrayBuffer) => {
   return { mode: "legacy", sheets };
 };
 
+// Empareja el "Responsable" de una fila de cronograma con un colaborador
+// real por nombre de pila exacto (case-insensitive) — sin fuzzy matching:
+// mejor dejar sin asignar (y que se vea en la vista previa) que asignarle
+// una tarea a la persona equivocada por un nombre parecido.
+const matchCollaboratorId = (name, collaborators) => {
+  const norm = normalize(name);
+  if (!norm || norm === "sin asignar") return null;
+  const match = collaborators.find((c) => normalize(c.name).split(" ")[0] === norm);
+  return match ? match.id : null;
+};
+
 export default function ImportTasksModal({
   isOpen,
   onClose,
   urlApi,
   projectId,
+  collaborators = [],
   refresh,
 }) {
   const [fileName, setFileName] = useState("");
@@ -480,10 +644,15 @@ export default function ImportTasksModal({
         const result = parseWorkbook(e.target.result);
         setParsed(result);
 
-        const isEmpty = result.mode === "erp-catalog" ? result.stories.length === 0 : result.sheets.length === 0;
+        const isEmpty =
+          result.mode === "erp-catalog"
+            ? result.stories.length === 0
+            : result.mode === "schedule"
+              ? result.tasks.length === 0
+              : result.sheets.length === 0;
         if (isEmpty) {
           toast.error(
-            "No se encontraron filas con columnas reconocibles (ni el catálogo ERP con hoja \"Historias de Usuario\", ni la plantilla Tipo/Título/Tags/Descripción/Padre, ni la de Épica/ID HU/Historia de Usuario/Subtarea)."
+            "No se encontraron filas con columnas reconocibles (ni el catálogo ERP con hoja \"Historias de Usuario\", ni un cronograma con Fecha/Tarea/Responsable/Estado, ni la plantilla Tipo/Título/Tags/Descripción/Padre, ni la de Épica/ID HU/Historia de Usuario/Subtarea)."
           );
         }
       } catch (error) {
@@ -528,12 +697,52 @@ export default function ImportTasksModal({
         }
       : null;
 
+  // Cruza cada fila del cronograma con la lista real de colaboradores; se
+  // recalcula si cambia el archivo o la lista de colaboradores (ej. llega
+  // después de abrir el modal).
+  const resolvedScheduleTasks = useMemo(() => {
+    if (parsed?.mode !== "schedule") return [];
+    return parsed.tasks.map((t) => ({
+      ...t,
+      assigned_to: matchCollaboratorId(t.responsable_name, collaborators),
+    }));
+  }, [parsed, collaborators]);
+
+  const scheduleTotals =
+    parsed?.mode === "schedule"
+      ? {
+          tasks: resolvedScheduleTasks.length,
+          withDueDate: resolvedScheduleTasks.filter((t) => t.due_date).length,
+          matched: resolvedScheduleTasks.filter((t) => t.assigned_to).length,
+          unmatchedNames: [
+            ...new Set(
+              resolvedScheduleTasks
+                .filter((t) => t.responsable_name && !t.assigned_to)
+                .map((t) => t.responsable_name)
+            ),
+          ],
+        }
+      : null;
+
   const canImport =
-    parsed?.mode === "erp-catalog" ? parsed.stories.length > 0 : includedSheets.length > 0;
+    parsed?.mode === "erp-catalog"
+      ? parsed.stories.length > 0
+      : parsed?.mode === "schedule"
+        ? resolvedScheduleTasks.length > 0
+        : includedSheets.length > 0;
 
   const handleConfirmImport = () => {
     if (!canImport) return;
     setImporting(true);
+
+    const scheduleRows = resolvedScheduleTasks.map((t) => ({
+      titulo: t.title,
+      descripcion: t.description,
+      status: t.status,
+      due_date: t.due_date,
+      assigned_to: t.assigned_to,
+      tags: t.tags,
+    }));
 
     const request =
       parsed.mode === "erp-catalog"
@@ -548,11 +757,17 @@ export default function ImportTasksModal({
             },
             { headers: authHeaders() }
           )
-        : axios.post(
-            `${urlApi}project/${projectId}/import-tasks`,
-            { rows: includedSheets.flatMap((sheet) => sheet.rows), created_by: getCurrentUserId() },
-            { headers: authHeaders() }
-          );
+        : parsed.mode === "schedule"
+          ? axios.post(
+              `${urlApi}project/${projectId}/import-tasks`,
+              { rows: scheduleRows, created_by: getCurrentUserId() },
+              { headers: authHeaders() }
+            )
+          : axios.post(
+              `${urlApi}project/${projectId}/import-tasks`,
+              { rows: includedSheets.flatMap((sheet) => sheet.rows), created_by: getCurrentUserId() },
+              { headers: authHeaders() }
+            );
 
     toast.promise(
       request
@@ -609,14 +824,17 @@ export default function ImportTasksModal({
 
       <CardContent className="space-y-4">
         <p className="text-sm text-muted-foreground">
-          Se reconocen tres formatos: un <strong>catálogo ERP</strong> (hoja
+          Se reconocen cuatro formatos: un <strong>catálogo ERP</strong> (hoja
           &ldquo;Historias de Usuario&rdquo; con Módulo/Épica/Rol/Prioridad/Release/Caso de
           uso, más opcionalmente Criterios de aceptación/Módulos/Casos de
-          Uso/Roles); una plantilla plana con{" "}
+          Uso/Roles); un <strong>cronograma</strong> con columnas
+          Fecha/Tarea/Responsable/Estado (y opcionalmente una hoja &ldquo;Hitos
+          clave&rdquo;); una plantilla plana con{" "}
           <strong>Tipo/Título/Tags/Descripción/Padre</strong>; o un backlog de
           HUs con <strong>Épica/ID HU/Historia de Usuario/Subtarea</strong>{" "}
-          agrupadas por fila. Las tareas se crean sin colaborador asignado (lo
-          asignas después manualmente).
+          agrupadas por fila. Solo el cronograma asigna colaborador y fecha
+          límite automáticamente (por nombre); en los demás formatos las
+          tareas quedan sin asignar.
         </p>
 
         <label className="flex items-center gap-2 border rounded-md p-3 cursor-pointer hover:bg-muted/50">
@@ -645,6 +863,29 @@ export default function ImportTasksModal({
               Las historias que ya existan en este proyecto (mismo código,
               ej. HU-ADM-001) se actualizan en vez de duplicarse; sus
               criterios de aceptación se reemplazan por los de la hoja.
+            </p>
+          </div>
+        )}
+
+        {parsed?.mode === "schedule" && (
+          <div className="text-sm bg-muted/50 rounded-md p-3 space-y-1">
+            <p>
+              Cronograma detectado: <strong>{scheduleTotals.tasks}</strong>{" "}
+              tareas, <strong>{scheduleTotals.withDueDate}</strong> con fecha
+              límite y <strong>{scheduleTotals.matched}</strong> emparejadas
+              con un colaborador real por nombre.
+            </p>
+            {scheduleTotals.unmatchedNames.length > 0 && (
+              <p className="text-xs text-amber-700">
+                No se pudo emparejar el nombre &ldquo;
+                {scheduleTotals.unmatchedNames.join('", "')}&rdquo; con ningún
+                colaborador — esas tareas se importan sin asignar; las
+                reasignas a mano después.
+              </p>
+            )}
+            <p className="text-xs text-muted-foreground">
+              Las tareas que ya existan en este proyecto (mismo título) se
+              actualizan de estado en vez de duplicarse.
             </p>
           </div>
         )}

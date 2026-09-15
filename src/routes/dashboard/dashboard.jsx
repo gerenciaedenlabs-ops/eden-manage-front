@@ -172,7 +172,9 @@ export default function Dashboard() {
       const task = taskResponse.data.data;
       const rootTaskId = task.parent_id || task.id;
 
-      const projectsResponse = await axios.get(`${API_URL}project/project-active`);
+      const projectsResponse = await axios.get(`${API_URL}project/project-active`, {
+        headers: authHeaders(),
+      });
       const project =
         projectsResponse.data.data?.find((p) => p.id === task.project_id) ||
         { id: task.project_id, title: "Proyecto" };

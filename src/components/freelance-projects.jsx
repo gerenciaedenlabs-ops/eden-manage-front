@@ -16,6 +16,7 @@ import EditProjectFreelance from "@components/project-ideas/modal/edit-project-i
 import DeleteProjectFreelance from "@components/project-ideas/modal/delete-project-idea";
 import ViewProjectFreelance from "@components/project-ideas/modal/view-project-idea";
 import { ProgressRing, StatusBadge, ProjectsStatsRow, PageHeaderIcon } from "@components/projects-shared.jsx";
+import { authHeaders } from "@components/project-detail/task-constants.js";
 
 // eslint-disable-next-line react/prop-types
 export default function FreelanceProjects({ urlApi, onViewDetails }) {
@@ -35,9 +36,7 @@ export default function FreelanceProjects({ urlApi, onViewDetails }) {
   function getProjectFreelance() {
     axios
       .get(`${urlApi}project/project-freelance`, {
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: authHeaders(),
       })
       .then((response) => {
         setListFreelance(response.data.data);
@@ -62,10 +61,7 @@ export default function FreelanceProjects({ urlApi, onViewDetails }) {
     toast.promise(
       axios
         .post(`${urlApi}project/save-freelance`, project_freelance, {
-          headers: {
-            "Content-Type": "application/json",
-            // "api-key": apiKey,
-          },
+          headers: authHeaders(),
         })
         .then((response) => {
           if (response.data.status === "ok") {
