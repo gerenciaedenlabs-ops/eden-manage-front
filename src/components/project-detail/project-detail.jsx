@@ -557,11 +557,11 @@ export default function ProjectDetail({
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-4">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
         <Button variant="ghost" onClick={onBack}>
           <ArrowLeft /> Volver
         </Button>
-        <h1 className="text-3xl font-bold">{project?.title}</h1>
+        <h1 className="min-w-0 break-words text-2xl font-bold sm:text-3xl">{project?.title}</h1>
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
@@ -633,7 +633,7 @@ export default function ProjectDetail({
 
       {projectProgress.total > 0 && (
         <div className="border rounded-lg p-5 space-y-4">
-          <div className="flex items-baseline justify-between">
+          <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
             <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
               Progreso del proyecto
             </span>
@@ -646,7 +646,7 @@ export default function ProjectDetail({
             </span>
           </div>
 
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4">
             {columns.map((col) => {
               const c = STATUS_COLORS[col];
               return (
@@ -681,90 +681,22 @@ export default function ProjectDetail({
         </div>
       )}
 
-      <div className="flex flex-col sm:flex-row gap-3">
-        <div className="relative flex-1">
-          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Buscar por título o descripción..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-8"
-          />
-        </div>
+      {/* Arriba: buscador, vista y acciones; abajo: filtros en cuadrícula que se acomoda al ancho
+          (antes iban todos en una sola fila sin salto y obligaban a desplazarse de lado). */}
+      <div className="space-y-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative w-full sm:min-w-[220px] sm:flex-1">
+            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Buscar por título o descripción..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-8"
+            />
+          </div>
 
-        <Select value={filterCollaborator} onValueChange={setFilterCollaborator}>
-          <SelectTrigger className="sm:w-48">
-            <SelectValue placeholder="Colaborador" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ALL}>Todos los colaboradores</SelectItem>
-            {collaborators.map((c) => (
-              <SelectItem key={c.id} value={String(c.id)}>
-                {c.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
-        <Select value={filterTag} onValueChange={setFilterTag}>
-          <SelectTrigger className="sm:w-40">
-            <SelectValue placeholder="Tag" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ALL}>Todos los tags</SelectItem>
-            {allTags.map((tag) => (
-              <SelectItem key={tag} value={tag}>
-                {tag}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
-        {hasErpData && (
-          <>
-            <Select value={filterModule} onValueChange={setFilterModule}>
-              <SelectTrigger className="sm:w-44">
-                <SelectValue placeholder="Módulo" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={ALL}>Todos los módulos</SelectItem>
-                {allModules.map((m) => (
-                  <SelectItem key={m.code} value={m.code}>
-                    {m.code} · {m.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            <Select value={filterPriority} onValueChange={setFilterPriority}>
-              <SelectTrigger className="sm:w-36">
-                <SelectValue placeholder="Prioridad" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={ALL}>Toda prioridad</SelectItem>
-                <SelectItem value="Must">Must</SelectItem>
-                <SelectItem value="Should">Should</SelectItem>
-                <SelectItem value="Could">Could</SelectItem>
-              </SelectContent>
-            </Select>
-
-            {allReleases.length > 0 && (
-              <Select value={filterRelease} onValueChange={setFilterRelease}>
-                <SelectTrigger className="sm:w-32">
-                  <SelectValue placeholder="Release" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={ALL}>Todo release</SelectItem>
-                  {allReleases.map((r) => (
-                    <SelectItem key={r} value={r}>
-                      {r}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-
-            <div className="flex rounded-md border p-0.5">
+          {hasErpData && (
+            <div className="flex shrink-0 rounded-md border p-0.5">
               <Button
                 type="button"
                 variant={viewMode === "kanban" ? "default" : "ghost"}
@@ -786,28 +718,104 @@ export default function ProjectDetail({
                 <Network className="w-4 h-4" />
               </Button>
             </div>
-          </>
-        )}
+          )}
 
-        {userIsAdmin && (
-          <>
-            <Button variant="outline" onClick={() => setOpenImportModal(true)} className="whitespace-nowrap">
-              <Upload className="w-4 h-4 mr-2" />
-              Importar desde Excel
-            </Button>
-            <Button onClick={() => setOpenAddModal(true)} className="whitespace-nowrap">
-              <Plus className="w-4 h-4 mr-2" />
-              Agregar tarea
-            </Button>
-          </>
-        )}
+          {userIsAdmin && (
+            <div className="flex w-full gap-2 sm:w-auto">
+              <Button variant="outline" onClick={() => setOpenImportModal(true)} className="flex-1 whitespace-nowrap sm:flex-none">
+                <Upload className="w-4 h-4 mr-2" />
+                Importar desde Excel
+              </Button>
+              <Button onClick={() => setOpenAddModal(true)} className="flex-1 whitespace-nowrap sm:flex-none">
+                <Plus className="w-4 h-4 mr-2" />
+                Agregar tarea
+              </Button>
+            </div>
+          )}
+        </div>
+
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+          <Select value={filterCollaborator} onValueChange={setFilterCollaborator}>
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Colaborador" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ALL}>Todos los colaboradores</SelectItem>
+              {collaborators.map((c) => (
+                <SelectItem key={c.id} value={String(c.id)}>
+                  {c.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <Select value={filterTag} onValueChange={setFilterTag}>
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Tag" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ALL}>Todos los tags</SelectItem>
+              {allTags.map((tag) => (
+                <SelectItem key={tag} value={tag}>
+                  {tag}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          {hasErpData && (
+            <>
+              <Select value={filterModule} onValueChange={setFilterModule}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Módulo" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={ALL}>Todos los módulos</SelectItem>
+                  {allModules.map((m) => (
+                    <SelectItem key={m.code} value={m.code}>
+                      {m.code} · {m.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              <Select value={filterPriority} onValueChange={setFilterPriority}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Prioridad" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={ALL}>Toda prioridad</SelectItem>
+                  <SelectItem value="Must">Must</SelectItem>
+                  <SelectItem value="Should">Should</SelectItem>
+                  <SelectItem value="Could">Could</SelectItem>
+                </SelectContent>
+              </Select>
+
+              {allReleases.length > 0 && (
+                <Select value={filterRelease} onValueChange={setFilterRelease}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Release" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={ALL}>Todo release</SelectItem>
+                    {allReleases.map((r) => (
+                      <SelectItem key={r} value={r}>
+                        {r}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </>
+          )}
+        </div>
       </div>
 
       {viewMode === "hierarchy" ? (
         <HierarchyView tasks={filteredTasks} onView={handleViewTask} />
       ) : (
       <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
-        <div className="grid gap-5 md:grid-cols-3 items-start">
+        <div className="grid gap-5 lg:grid-cols-3 items-start">
           {columns.map((column) => {
             const c = STATUS_COLORS[column];
             return (
