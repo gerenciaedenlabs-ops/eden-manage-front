@@ -405,7 +405,8 @@ export default function Dashboard() {
           </SidebarGroup>
         </SidebarContent>
       </Sidebar>
-      <SidebarInset>
+      {/* min-w-0: sin esto el contenido (flex-1) se estira con lo que tenga adentro y la página se desplaza de lado. */}
+      <SidebarInset className="min-w-0">
         <header className="flex h-16 shrink-0 items-center justify-between gap-2 border-b px-4">
           <SidebarTrigger className="-ml-1" />
           <div className="flex items-center gap-2">
@@ -413,7 +414,7 @@ export default function Dashboard() {
             <Button onClick={handleLogOut}>Cerrar Sesión</Button>
           </div>
         </header>
-        <div className="flex-1 p-6">{renderContent}</div>
+        <div className="min-w-0 flex-1 p-4 sm:p-6">{renderContent}</div>
       </SidebarInset>
     </SidebarProvider>
   );

@@ -200,10 +200,16 @@ const sheetRowsFromHeaderRow = (sheet, headerHints) => {
 // "Backlog"/vacío → pending, "En desarrollo" → inProgress, "Terminada" →
 // completed. Vocabulario propio de este formato (distinto de mapEstado, que
 // usa "Hecha"/"Parcial"/"Implementado").
+// También acepta el vocabulario del propio tablero ("Completado", "En
+// progreso", "Pendiente"), que es el que usan los catálogos exportados con los
+// 3 estados; antes esos valores caían todos en "pending".
+const COMPLETED_HU_STATES = new Set(["terminada", "terminado", "completado", "completada", "hecha", "hecho"]);
+const IN_PROGRESS_HU_STATES = new Set(["en desarrollo", "en progreso", "en pruebas"]);
+
 const mapEstadoHu = (estado) => {
   const norm = normalize(estado);
-  if (norm === "terminada") return "completed";
-  if (norm === "en desarrollo") return "inProgress";
+  if (COMPLETED_HU_STATES.has(norm)) return "completed";
+  if (IN_PROGRESS_HU_STATES.has(norm)) return "inProgress";
   return "pending";
 };
 
